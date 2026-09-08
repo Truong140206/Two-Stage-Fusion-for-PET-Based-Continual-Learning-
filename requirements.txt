@@ -1,0 +1,6 @@
+numpy
+Pillow
+timm==0.6.7
+scikit-learn
+scipy
+requests
