@@ -18,7 +18,6 @@ from timm.optim import create_optimizer
 from timm.scheduler import create_scheduler
 from torch import optim
 import utils
-from torch.distributions.multivariate_normal import MultivariateNormal
 
 
 def train_one_epoch(model: torch.nn.Module, criterion, data_loader: Iterable, optimizer: torch.optim.Optimizer,

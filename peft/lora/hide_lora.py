@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import math
-import numpy as np
 
 class HideLoraPool(nn.Module):
     def __init__(self, pool_size, depth, dim, rank, lora_alpha=1):

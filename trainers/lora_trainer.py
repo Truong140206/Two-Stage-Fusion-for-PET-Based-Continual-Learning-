@@ -3,7 +3,7 @@ import utils
 from timm.models import create_model
 from timm.scheduler import create_scheduler
 from timm.optim import create_optimizer
-import time, datetime, os, sys, random, numpy as np
+import time, datetime, os, numpy as np
 from datasets import build_continual_dataloader
 from engines.hrm_lora_wtp_and_tap_engine import (
     _compute_mean, _compute_shared_feature_memory, calibrate_rp_head,
@@ -24,7 +24,6 @@ from engines.calibrated_progressive_rematching import (
 )
 import vits.hrm_lora_vision_transformer as hide_lora_vision_transformer
 import torch.nn as nn
-import torch.nn.init as init
 from engines.cfs_pmi_diagnostic import run_cfs_pmi_diagnostic
 from engines.cfs_task_logit_calibration import (
     validate_cfs_task_logit_calibration_state,

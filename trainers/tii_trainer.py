@@ -1,13 +1,8 @@
-import sys
-import argparse
 import datetime
-import random
 import numpy as np
 import time
 import torch
-import torch.backends.cudnn as cudnn
 
-from pathlib import Path
 
 from timm.models import create_model
 from timm.scheduler import create_scheduler

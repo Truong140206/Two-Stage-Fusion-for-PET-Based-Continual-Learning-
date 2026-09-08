@@ -4,7 +4,6 @@ import torch
 from torch.utils.data.dataset import Subset
 from torchvision import datasets, transforms
 
-from timm.data import create_transform
 
 from continual_datasets.continual_datasets import *
 

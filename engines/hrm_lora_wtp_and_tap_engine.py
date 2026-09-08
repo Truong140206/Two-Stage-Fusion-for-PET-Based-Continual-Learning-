@@ -6,7 +6,6 @@ import datetime
 import json
 from typing import Iterable
 from pathlib import Path
-import torchvision.transforms as transforms
 import torch
 import torch.distributed as dist
 import numpy as np
@@ -16,46 +15,12 @@ from timm.optim import create_optimizer
 from timm.scheduler import create_scheduler
 from torch import optim
 import utils
-from engines.exhaustive_rematching import exhaustive_adapter_rematching
-from engines.vectorized_exhaustive_rematching import vectorized_exhaustive_adapter_rematching
-from engines.soft_mixture_rematching import (
-    soft_mixture_adapter_rematching,
-    soft_hard_confidence_selector_rematching,
-    soft_mixture_hard_adapter_rematching,
-    soft_mixture_local_hard_refinement,
-)
-from engines.hierarchical_rematching import hierarchical_adapter_rematching
-from engines.budgeted_rematching import budgeted_exhaustive_fallback
 from engines.progressive_rematching import progressive_adapter_rematching
-from engines.progressive_oracle_audit import progressive_oracle_audit
-from engines.random_projection_head import (
-    accumulate_rp_statistics, fit_rp_temperature, reset_rp_head,
-    rp_head_predict, solve_rp_head)
-from engines.layer_stat_router import (
-    accumulate_task_stats, install_hooks, layer_stat_scores, remove_hooks,
-    reset_layer_stats, task_stats_ready)
-from engines.prediction_proposal_rematching import (
-    cross_adapter_borda_consensus,
-    cross_adapter_global_consensus,
-    initial_branch_confidence_dominance,
-    prediction_proposal_adapter_rematching,
-)
-from engines.prediction_closure_rematching import (
-    prediction_closure_tii_tail_rematching,
-)
+from engines.random_projection_head import accumulate_rp_statistics, fit_rp_temperature, rp_head_predict
+from engines.layer_stat_router import accumulate_task_stats, install_hooks, layer_stat_scores, remove_hooks, task_stats_ready
 from engines.calibrated_progressive_rematching import (
     calibrated_progressive_rematching,
     get_progressive_halting_gates,
-)
-from engines.selective_rematching import selective_adapter_rematching
-from engines.prototype_rematching import (
-    build_prototype_bank, prototype_assisted_rematching)
-from engines.shared_prototype_router import (
-    build_shared_prototype_bank, shared_space_prototype_routing)
-from engines.replay_anchored_ctird import (
-    build_replay_anchor_memory,
-    generate_task_replay_cache,
-    replay_anchor_relation_loss,
 )
 from engines.cfs_task_logit_calibration import (
     fit_cfs_task_logit_calibration,
@@ -299,7 +264,7 @@ def train_one_epoch(model: torch.nn.Module, original_model: torch.nn.Module,
                     criterion, data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, max_norm: float = 0,
                     set_training_mode=True, task_id=-1, class_mask=None, target_task_map=None,
-                    args=None, old_features=None, replay_anchor_memory=None):
+                    args=None, old_features=None):
     model.train(set_training_mode)
     original_model.eval()
 
@@ -311,16 +276,6 @@ def train_one_epoch(model: torch.nn.Module, original_model: torch.nn.Module,
     metric_logger.add_meter('Loss', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
     online_aligned_ctird = (
         task_id > 0 and bool(getattr(args, 'ctird_online_aligned', False)))
-    replay_anchor_enabled = (
-        task_id > 0
-        and bool(getattr(args, 'replay_anchor_ctird', False))
-        and replay_anchor_memory is not None
-        and not replay_anchor_memory.empty
-    )
-    if replay_anchor_enabled:
-        metric_logger.add_meter('ReplayCT', utils.SmoothedValue(window_size=20, fmt='{avg:.4f}'))
-        metric_logger.add_meter('ReplayKeep', utils.SmoothedValue(window_size=20, fmt='{avg:.1f}'))
-        metric_logger.add_meter('ReplayConf', utils.SmoothedValue(window_size=20, fmt='{avg:.3f}'))
     header = f'Train: Epoch[{epoch + 1:{int(math.log10(args.epochs)) + 1}}/{args.epochs}]'
     global_index = 0
     for input, target in metric_logger.log_every(data_loader, args.print_freq, header):
@@ -439,21 +394,6 @@ def train_one_epoch(model: torch.nn.Module, original_model: torch.nn.Module,
         else:
             loss = criterion(logits, target)+args.con*loss_ctird
             
-        replay_ctird_loss = logits.new_zeros(())
-        replay_kept = 0
-        replay_confidence = 0.0
-        if replay_anchor_enabled:
-            replay_ctird_loss, replay_kept, replay_confidence = replay_anchor_relation_loss(
-                model=model,
-                memory=replay_anchor_memory,
-                current_task_id=task_id,
-                seen_classes=replay_anchor_memory.class_ids,
-                args=args,
-                device=device,
-            )
-            replay_weight = max(
-                0.0, float(getattr(args, 'replay_anchor_weight', 0.05)))
-            loss = loss + replay_weight * replay_ctird_loss
 
         acc1, acc5 = accuracy(logits, target, topk=(1, 5))
 
@@ -469,10 +409,6 @@ def train_one_epoch(model: torch.nn.Module, original_model: torch.nn.Module,
         torch.cuda.synchronize()
         metric_logger.update(Loss=loss.item())
         metric_logger.update(Lr=optimizer.param_groups[0]["lr"])
-        if replay_anchor_enabled:
-            metric_logger.update(ReplayCT=replay_ctird_loss.item())
-            metric_logger.update(ReplayKeep=float(replay_kept))
-            metric_logger.update(ReplayConf=float(replay_confidence))
         metric_logger.meters['Acc@1'].update(acc1.item(), n=input.shape[0])
         metric_logger.meters['Acc@5'].update(acc5.item(), n=input.shape[0])
         global_index = global_index+1
@@ -1035,53 +971,6 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
     # switch to evaluation mode
     model.eval()
     original_model.eval()
-    prototype_bank = None
-    local_prototype_enabled = (
-        float(getattr(args, 'exhaustive_local_prototype_weight', 0.0)) > 0.0
-    )
-    if (bool(getattr(args, 'prototype_rematching', False))
-            or local_prototype_enabled):
-        seen_classes = [
-            int(class_id)
-            for seen_task in range(task_id + 1)
-            for class_id in class_mask[seen_task]
-        ]
-        prototype_bank = build_prototype_bank(
-            model, cls_real_features, seen_classes, device)
-        if utils.is_main_process():
-            if local_prototype_enabled:
-                print(
-                    'Task-local prototype fusion:',
-                    'classes=', len(prototype_bank),
-                    'weight=', float(getattr(
-                        args, 'exhaustive_local_prototype_weight', 0.0)),
-                    'temperature=', float(getattr(
-                        args, 'exhaustive_local_prototype_temperature', 0.07)),
-                )
-            else:
-                print(
-                    'Prototype rematching:',
-                    'classes=', len(prototype_bank),
-                    'candidate_tasks=', int(getattr(
-                        args, 'prototype_candidate_tasks', 2)),
-                    'temperature=', float(getattr(
-                        args, 'prototype_temperature', 0.07)),
-                )
-    shared_prototype_bank = None
-    if bool(getattr(args, 'shared_prototype_router', False)):
-        seen_classes = [
-            int(class_id)
-            for seen_task in range(task_id + 1)
-            for class_id in class_mask[seen_task]
-        ]
-        shared_prototype_bank = build_shared_prototype_bank(
-            cls_shared_features, seen_classes, device)
-        if utils.is_main_process():
-            print(
-                'Shared prototype router:',
-                'classes=', len(shared_prototype_bank),
-                'temperature=', float(getattr(args, 'shared_prototype_temperature', 0.07)),
-            )
 
     # Explicit sentinel rather than a `'fusion_rp_scores' in dir()` probe. dir()
     # reads the function's locals, so once any batch assigns the name it stays
@@ -1312,364 +1201,6 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
                     n=input.shape[0])
                 continue
 
-            if bool(getattr(args, 'progressive_oracle_audit', False)):
-                logits, prompt_id, audit = progressive_oracle_audit(
-                    model=model,
-                    inputs=input,
-                    tii_logits=old_logits,
-                    class_mask=class_mask,
-                    seen_task_count=task_id + 1,
-                    args=args,
-                    targets=target,
-                    true_task=i,
-                )
-                filtered_index_tensor = torch.empty(
-                    0, dtype=torch.long, device=device)
-                re_id = None
-                loss = criterion(logits, target)
-                acc1, acc5 = accuracy(logits, target, topk=(1, 5))
-                task_inference_acc = utils.task_inference_accuracy(
-                    prompt_id.unsqueeze(-1), target, target_task_map,
-                    filtered_index_tensor, re_id)
-                metric_logger.meters['Loss'].update(loss.item())
-                metric_logger.meters['Acc@1'].update(acc1.item(), n=input.shape[0])
-                metric_logger.meters['Acc@5'].update(acc5.item(), n=input.shape[0])
-                metric_logger.meters['Acc@task'].update(
-                    task_inference_acc.item(), n=input.shape[0])
-                audit_percent_metrics = {
-                    'WinnerRecall@2': 'winner_recall_2',
-                    'WinnerRecall@4': 'winner_recall_4',
-                    'ExactAgreement@2': 'exact_agreement_2',
-                    'ExactAgreement@4': 'exact_agreement_4',
-                }
-                for metric_name, audit_name in audit_percent_metrics.items():
-                    metric_logger.meters[metric_name].update(
-                        audit[audit_name].float().mean().mul(100.0).item(),
-                        n=input.shape[0])
-                metric_logger.meters['OracleLoRA/sample'].update(
-                    audit['oracle_lora_counts'].mean().item(), n=input.shape[0])
-                metric_logger.meters['ActualLoRA/sample'].update(
-                    audit['actual_lora_counts'].mean().item(), n=input.shape[0])
-                if bool(getattr(args, 'router_recall_audit', False)):
-                    for router_name in ('max', 'energy', 'margin', 'mean'):
-                        metric_logger.meters[
-                            'Router_{}_MeanRank'.format(router_name)].update(
-                            audit['router_{}_mean_rank'.format(
-                                router_name)].mean().item(),
-                            n=input.shape[0])
-                        for recall_k in (1, 2, 3, 4):
-                            metric_logger.meters[
-                                'Router_{}_Recall@{}'.format(
-                                    router_name, recall_k)].update(
-                                audit['router_{}_recall_{}'.format(
-                                    router_name, recall_k)].float().mean()
-                                .mul(100.0).item(),
-                                n=input.shape[0])
-                if bool(getattr(args, 'stage_drift_audit', False)):
-                    stage_percent_metrics = {
-                        'OwnLocalAcc@1':
-                            'stage_drift_own_local_correct',
-                        'OwnSeenAcc@1':
-                            'stage_drift_own_seen_correct',
-                        'OwnSeenTaskAcc':
-                            'stage_drift_own_seen_task_correct',
-                        'LocalToSeenFailure':
-                            'stage_drift_local_to_seen_failure',
-                    }
-                    for metric_name, audit_name in (
-                            stage_percent_metrics.items()):
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    metric_logger.meters['OwnLocalLoss'].update(
-                        audit['stage_drift_own_local_loss'].mean().item(),
-                        n=input.shape[0])
-                    metric_logger.meters['OwnSeenLoss'].update(
-                        audit['stage_drift_own_seen_loss'].mean().item(),
-                        n=input.shape[0])
-                if bool(getattr(args, 'progressive_arrow_audit', False)):
-                    arrow_percent_metrics = {
-                        'ArrowRecall@2': 'arrow_winner_recall_2',
-                        'ArrowRecall@4': 'arrow_winner_recall_4',
-                        'UnionRecall@2x2': 'arrow_union_recall_2x2',
-                        'TIIArrowTop1Agree': 'tii_arrow_top1_agreement',
-                    }
-                    for metric_name, audit_name in arrow_percent_metrics.items():
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    metric_logger.meters['UnionLoRA/sample'].update(
-                        audit['arrow_union_lora_counts'].mean().item(),
-                        n=input.shape[0])
-                if bool(getattr(args, 'progressive_lora_response_audit', False)):
-                    response_percent_metrics = {
-                        'ResponseRecall@2': 'response_winner_recall_2',
-                        'ResponseRecall@4': 'response_winner_recall_4',
-                        'ResponseUnionRecall@2x2': 'response_union_recall_2x2',
-                        'TIIResponseTop1Agree': 'tii_response_top1_agreement',
-                    }
-                    for metric_name, audit_name in response_percent_metrics.items():
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    metric_logger.meters['ResponseUnionLoRA/sample'].update(
-                        audit['response_union_lora_counts'].mean().item(),
-                        n=input.shape[0])
-                if bool(getattr(
-                        args, 'progressive_prediction_proposal_audit', False)):
-                    proposal_percent_metrics = {
-                        'ProposalWinnerRecall':
-                            'prediction_proposal_winner_recall',
-                        'ProposalExactAgreement':
-                            'prediction_proposal_exact_agreement',
-                        'ProposalNewWinner':
-                            'prediction_proposal_new_winner',
-                    }
-                    for metric_name, audit_name in proposal_percent_metrics.items():
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    metric_logger.meters['ProposalLoRA/sample'].update(
-                        audit['prediction_proposal_lora_counts'].mean().item(),
-                        n=input.shape[0])
-                if bool(getattr(
-                        args, 'progressive_prediction_closure_audit', False)):
-                    closure_percent_metrics = {
-                        'ClosureWinnerRecall':
-                            'prediction_closure_winner_recall',
-                        'ClosureExactAgreement':
-                            'prediction_closure_exact_agreement',
-                        'ClosureTop5Coverage':
-                            'prediction_closure_top5_coverage',
-                        'ClosureFullScanRate':
-                            'prediction_closure_full_scan',
-                    }
-                    for metric_name, audit_name in (
-                            closure_percent_metrics.items()):
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    metric_logger.meters['ClosureLoRA/sample'].update(
-                        audit['prediction_closure_lora_counts'].mean().item(),
-                        n=input.shape[0])
-                    metric_logger.meters['ClosureCalls/sample'].update(
-                        audit['prediction_closure_forward_calls'].mean().item(),
-                        n=input.shape[0])
-                if bool(getattr(
-                        args, 'progressive_prediction_beam_closure_audit',
-                        False)):
-                    beam_percent_metrics = {
-                        'BeamClosureWinnerRecall':
-                            'prediction_beam_closure_winner_recall',
-                        'BeamClosureExactAgreement':
-                            'prediction_beam_closure_exact_agreement',
-                        'BeamClosureFullScanRate':
-                            'prediction_beam_closure_full_scan',
-                    }
-                    for metric_name, audit_name in (
-                            beam_percent_metrics.items()):
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    metric_logger.meters['BeamClosureLoRA/sample'].update(
-                        audit[
-                            'prediction_beam_closure_lora_counts'
-                        ].mean().item(), n=input.shape[0])
-                    metric_logger.meters['BeamClosureCalls/sample'].update(
-                        audit[
-                            'prediction_beam_closure_forward_calls'
-                        ].mean().item(), n=input.shape[0])
-                if bool(getattr(
-                        args, 'progressive_prediction_budget_closure_audit',
-                        False)):
-                    budget_percent_metrics = {
-                        'BudgetClosureWinnerRecall':
-                            'prediction_budget_closure_winner_recall',
-                        'BudgetClosureExactAgreement':
-                            'prediction_budget_closure_exact_agreement',
-                        'BudgetClosureBudgetHitRate':
-                            'prediction_budget_closure_budget_hit',
-                    }
-                    for metric_name, audit_name in (
-                            budget_percent_metrics.items()):
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    metric_logger.meters['BudgetClosureLoRA/sample'].update(
-                        audit[
-                            'prediction_budget_closure_lora_counts'
-                        ].mean().item(), n=input.shape[0])
-                    metric_logger.meters['BudgetClosureCalls/sample'].update(
-                        audit[
-                            'prediction_budget_closure_forward_calls'
-                        ].mean().item(), n=input.shape[0])
-                if bool(getattr(
-                        args, 'progressive_prediction_majority_closure_audit',
-                        False)):
-                    majority_percent_metrics = {
-                        'MajorityClosureWinnerRecall':
-                            'prediction_majority_closure_winner_recall',
-                        'MajorityClosureExactAgreement':
-                            'prediction_majority_closure_exact_agreement',
-                        'MajorityClosureCertifiedRate':
-                            'prediction_majority_closure_majority_rate',
-                    }
-                    for metric_name, audit_name in (
-                            majority_percent_metrics.items()):
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    metric_logger.meters['MajorityClosureLoRA/sample'].update(
-                        audit[
-                            'prediction_majority_closure_lora_counts'
-                        ].mean().item(), n=input.shape[0])
-                    metric_logger.meters['MajorityClosureCalls/sample'].update(
-                        audit[
-                            'prediction_majority_closure_forward_calls'
-                        ].mean().item(), n=input.shape[0])
-                if bool(getattr(
-                        args, 'progressive_prediction_consensus_closure_audit',
-                        False)):
-                    consensus_percent_metrics = {
-                        'ConsensusClosureWinnerRecall':
-                            'prediction_consensus_closure_winner_recall',
-                        'ConsensusClosureExactAgreement':
-                            'prediction_consensus_closure_exact_agreement',
-                        'ConsensusClosureCertifiedRate':
-                            'prediction_consensus_closure_certified_rate',
-                    }
-                    for metric_name, audit_name in (
-                            consensus_percent_metrics.items()):
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    metric_logger.meters['ConsensusClosureLoRA/sample'].update(
-                        audit[
-                            'prediction_consensus_closure_lora_counts'
-                        ].mean().item(), n=input.shape[0])
-                    metric_logger.meters['ConsensusClosureCalls/sample'].update(
-                        audit[
-                            'prediction_consensus_closure_forward_calls'
-                        ].mean().item(), n=input.shape[0])
-                if bool(getattr(
-                        args, 'progressive_prediction_self_owner_audit',
-                        False)):
-                    self_owner_percent_metrics = {
-                        'SelfOwnerWinnerRecall':
-                            'prediction_self_owner_winner_recall',
-                        'SelfOwnerExactAgreement':
-                            'prediction_self_owner_exact_agreement',
-                        'SelfOwnerRouteRate':
-                            'prediction_self_owner_route_rate',
-                        'SelfOwnerMultipleRate':
-                            'prediction_self_owner_multiple_rate',
-                    }
-                    for metric_name, audit_name in (
-                            self_owner_percent_metrics.items()):
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    metric_logger.meters['SelfOwnerSupport'].update(
-                        audit['prediction_self_owner_support'].mean().item(),
-                        n=input.shape[0])
-                    metric_logger.meters['SelfOwnerLoRA/sample'].update(
-                        audit['prediction_self_owner_lora_counts'].mean().item(),
-                        n=input.shape[0])
-                    metric_logger.meters['SelfOwnerCalls/sample'].update(
-                        audit[
-                            'prediction_self_owner_forward_calls'
-                        ].mean().item(), n=input.shape[0])
-                if bool(getattr(
-                        args,
-                        'progressive_prediction_corroborated_owner_audit',
-                        False)):
-                    corroborated_percent_metrics = {
-                        'CorroboratedOwnerWinnerRecall':
-                            'prediction_corroborated_owner_winner_recall',
-                        'CorroboratedOwnerExactAgreement':
-                            'prediction_corroborated_owner_exact_agreement',
-                        'CorroboratedOwnerRescueRate':
-                            'prediction_corroborated_owner_rescue_rate',
-                    }
-                    for metric_name, audit_name in (
-                            corroborated_percent_metrics.items()):
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    rescued = audit[
-                        'prediction_corroborated_owner_rescue_rate']
-                    rescued_support = audit[
-                        'prediction_corroborated_owner_support']
-                    support_total = rescued_support.sum()
-                    support_count = rescued.sum().clamp_min(1)
-                    metric_logger.meters[
-                        'CorroboratedOwnerSupport'].update(
-                            (support_total / support_count).item(),
-                            n=max(1, int(rescued.sum().item())))
-                    metric_logger.meters[
-                        'CorroboratedOwnerLoRA/sample'].update(
-                            audit[
-                                'prediction_corroborated_owner_lora_counts'
-                            ].mean().item(), n=input.shape[0])
-                    metric_logger.meters[
-                        'CorroboratedOwnerCalls/sample'].update(
-                            audit[
-                                'prediction_corroborated_owner_forward_calls'
-                            ].mean().item(), n=input.shape[0])
-                if bool(getattr(
-                        args, 'progressive_prediction_owner_mass_audit',
-                        False)):
-                    owner_mass_percent_metrics = {
-                        'OwnerMassWinnerRecall':
-                            'prediction_owner_mass_winner_recall',
-                        'OwnerMassExactAgreement':
-                            'prediction_owner_mass_exact_agreement',
-                        'OwnerMassRescueRate':
-                            'prediction_owner_mass_rescue_rate',
-                        'OwnerMassAmbiguousRate':
-                            'prediction_owner_mass_ambiguous_rate',
-                    }
-                    for metric_name, audit_name in (
-                            owner_mass_percent_metrics.items()):
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    metric_logger.meters['OwnerMassLoRA/sample'].update(
-                        audit['prediction_owner_mass_lora_counts'].mean().item(),
-                        n=input.shape[0])
-                    metric_logger.meters['OwnerMassCalls/sample'].update(
-                        audit[
-                            'prediction_owner_mass_forward_calls'
-                        ].mean().item(), n=input.shape[0])
-                if bool(getattr(
-                        args,
-                        'progressive_prediction_owner_consensus_hedge_audit',
-                        False)):
-                    hedge_percent_metrics = {
-                        'OwnerHedgeWinnerRecall':
-                            'prediction_owner_hedge_winner_recall',
-                        'OwnerHedgeExactAgreement':
-                            'prediction_owner_hedge_exact_agreement',
-                        'OwnerHedgeRate':
-                            'prediction_owner_hedge_rate',
-                        'OwnerHedgeOwnerAgreement':
-                            'prediction_owner_hedge_owner_agreement',
-                        'OwnerHedgeConsensusAgreement':
-                            'prediction_owner_hedge_consensus_agreement',
-                    }
-                    for metric_name, audit_name in (
-                            hedge_percent_metrics.items()):
-                        metric_logger.meters[metric_name].update(
-                            audit[audit_name].float().mean().mul(100.0).item(),
-                            n=input.shape[0])
-                    metric_logger.meters['OwnerHedgeLoRA/sample'].update(
-                        audit['prediction_owner_hedge_lora_counts'].mean().item(),
-                        n=input.shape[0])
-                    metric_logger.meters['OwnerHedgeCalls/sample'].update(
-                        audit[
-                            'prediction_owner_hedge_forward_calls'
-                        ].mean().item(), n=input.shape[0])
-                continue
 
             if bool(getattr(args, 'progressive_rematching', False)):
                 logits, prompt_id, lora_counts, stop_stage = progressive_adapter_rematching(
@@ -1707,354 +1238,8 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
                     n=input.shape[0])
                 continue
 
-            if (bool(getattr(args, 'soft_mixture_rematching', False))
-                    or bool(getattr(args, 'soft_mixture_hard_rematching', False))
-                    or bool(getattr(args, 'soft_hard_selector_rematching', False))
-                    or bool(getattr(args, 'soft_local_hard_refinement', False))):
-                mixture_function = soft_mixture_adapter_rematching
-                if bool(getattr(args, 'soft_local_hard_refinement', False)):
-                    mixture_function = soft_mixture_local_hard_refinement
-                elif bool(getattr(args, 'soft_hard_selector_rematching', False)):
-                    mixture_function = soft_hard_confidence_selector_rematching
-                elif bool(getattr(args, 'soft_mixture_hard_rematching', False)):
-                    mixture_function = soft_mixture_hard_adapter_rematching
-                logits, prompt_id, mixture_diagnostics = (
-                    mixture_function(
-                        model=model,
-                        inputs=input,
-                        tii_logits=old_logits,
-                        class_mask=class_mask,
-                        seen_task_count=task_id + 1,
-                        args=args,
-                    )
-                )
-                filtered_index_tensor = torch.empty(
-                    0, dtype=torch.long, device=device)
-                re_id = None
-                loss = criterion(logits, target)
-                acc1, acc5 = accuracy(logits, target, topk=(1, 5))
-                task_inference_acc = utils.task_inference_accuracy(
-                    prompt_id.unsqueeze(-1), target, target_task_map,
-                    filtered_index_tensor, re_id)
-                metric_logger.meters['Loss'].update(loss.item())
-                metric_logger.meters['Acc@1'].update(
-                    acc1.item(), n=input.shape[0])
-                metric_logger.meters['Acc@5'].update(
-                    acc5.item(), n=input.shape[0])
-                metric_logger.meters['Acc@task'].update(
-                    task_inference_acc.item(), n=input.shape[0])
-                metric_logger.meters['LoRA/sample'].update(
-                    mixture_diagnostics['lora_counts'].mean().item(),
-                    n=input.shape[0])
-                metric_logger.meters['ForwardCalls/sample'].update(
-                    mixture_diagnostics['forward_calls'].mean().item(),
-                    n=input.shape[0])
-                if bool(getattr(args, 'soft_hard_selector_rematching', False)):
-                    soft_prediction = mixture_diagnostics[
-                        'soft_logits'].argmax(dim=1)
-                    hard_prediction = mixture_diagnostics[
-                        'hard_logits'].argmax(dim=1)
-                    soft_correct = soft_prediction.eq(target)
-                    hard_correct = hard_prediction.eq(target)
-                    selector_metrics = {
-                        'SoftAcc@1': soft_correct.float().mean() * 100.0,
-                        'HardAcc@1': hard_correct.float().mean() * 100.0,
-                        'SoftHardAgree': soft_prediction.eq(
-                            hard_prediction).float().mean() * 100.0,
-                        'SoftOnlyCorrect': (soft_correct & ~hard_correct).float(
-                            ).mean() * 100.0,
-                        'HardOnlyCorrect': (hard_correct & ~soft_correct).float(
-                            ).mean() * 100.0,
-                        'OracleAcc@1': (soft_correct | hard_correct).float(
-                            ).mean() * 100.0,
-                        'HardSelectRate': mixture_diagnostics[
-                            'select_hard'].float().mean() * 100.0,
-                    }
-                    for metric_name, metric_value in selector_metrics.items():
-                        metric_logger.meters[metric_name].update(
-                            metric_value.item(), n=input.shape[0])
-                if bool(getattr(args, 'soft_local_hard_refinement', False)):
-                    soft_prediction = mixture_diagnostics[
-                        'soft_logits'].argmax(dim=1)
-                    refined_prediction = logits.argmax(dim=1)
-                    soft_correct = soft_prediction.eq(target)
-                    refined_correct = refined_prediction.eq(target)
-                    refinement_metrics = {
-                        'RefineSoftAcc@1': soft_correct.float().mean() * 100.0,
-                        'RefinedAcc@1': refined_correct.float().mean() * 100.0,
-                        'SoftRefineAgree': soft_prediction.eq(
-                            refined_prediction).float().mean() * 100.0,
-                        'RefineSoftOnlyCorrect': (
-                            soft_correct & ~refined_correct).float().mean() * 100.0,
-                        'RefineOnlyCorrect': (
-                            refined_correct & ~soft_correct).float().mean() * 100.0,
-                        'RefineOracleAcc@1': (
-                            soft_correct | refined_correct).float().mean() * 100.0,
-                    }
-                    for metric_name, metric_value in refinement_metrics.items():
-                        metric_logger.meters[metric_name].update(
-                            metric_value.item(), n=input.shape[0])
-                continue
 
-            if (bool(getattr(args, 'hierarchical_rematching', False))
-                    or bool(getattr(args, 'exhaustive_rematching', False))
-                    or bool(getattr(args, 'vectorized_exhaustive_rematching', False))
-                    or bool(getattr(args, 'prediction_proposal_rematching', False))
-                    or bool(getattr(args, 'prediction_closure_rematching', False))):
-                cost_diagnostics = None
-                if bool(getattr(args, 'hierarchical_rematching', False)):
-                    logits, prompt_id = hierarchical_adapter_rematching(
-                        model=model,
-                        inputs=input,
-                        tii_logits=old_logits,
-                        class_mask=class_mask,
-                        seen_task_count=task_id + 1,
-                        args=args,
-                    )
-                elif bool(getattr(args, 'prediction_closure_rematching', False)):
-                    logits, prompt_id, cost_diagnostics = (
-                        prediction_closure_tii_tail_rematching(
-                            model=model,
-                            inputs=input,
-                            tii_logits=old_logits,
-                            class_mask=class_mask,
-                            seen_task_count=task_id + 1,
-                            args=args,
-                        )
-                    )
-                elif bool(getattr(args, 'prediction_proposal_rematching', False)):
-                    logits, prompt_id, cost_diagnostics = (
-                        prediction_proposal_adapter_rematching(
-                            model=model,
-                            inputs=input,
-                            tii_logits=old_logits,
-                            class_mask=class_mask,
-                            seen_task_count=task_id + 1,
-                            args=args,
-                        )
-                    )
-                elif bool(getattr(args, 'vectorized_exhaustive_rematching', False)):
-                    logits, prompt_id, cost_diagnostics = (
-                        vectorized_exhaustive_adapter_rematching(
-                            model=model,
-                            inputs=input,
-                            tii_logits=old_logits,
-                            class_mask=class_mask,
-                            seen_task_count=task_id + 1,
-                            args=args,
-                            prototype_bank=prototype_bank,
-                        )
-                    )
-                else:
-                    logits, prompt_id = exhaustive_adapter_rematching(
-                        model=model,
-                        inputs=input,
-                        tii_logits=old_logits,
-                        class_mask=class_mask,
-                        seen_task_count=task_id + 1,
-                        args=args,
-                        prototype_bank=prototype_bank,
-                    )
-                filtered_index_tensor = torch.empty(
-                    0, dtype=torch.long, device=device)
-                re_id = None
-                loss = criterion(logits, target)
-                acc1, acc5 = accuracy(logits, target, topk=(1, 5))
-                task_inference_acc = utils.task_inference_accuracy(
-                    prompt_id.unsqueeze(-1), target, target_task_map,
-                    filtered_index_tensor, re_id)
-                metric_logger.meters['Loss'].update(loss.item())
-                metric_logger.meters['Acc@1'].update(
-                    acc1.item(), n=input.shape[0])
-                metric_logger.meters['Acc@5'].update(
-                    acc5.item(), n=input.shape[0])
-                metric_logger.meters['Acc@task'].update(
-                    task_inference_acc.item(), n=input.shape[0])
-                if cost_diagnostics is not None:
-                    metric_logger.meters['LoRA/sample'].update(
-                        cost_diagnostics['lora_counts'].mean().item(),
-                        n=input.shape[0])
-                    metric_logger.meters['ForwardCalls/sample'].update(
-                        cost_diagnostics['forward_calls'].mean().item(),
-                        n=input.shape[0])
-                    if bool(getattr(
-                            args, 'prediction_proposal_initial_branch_audit', False)):
-                        initial_branch_logits = cost_diagnostics[
-                            'initial_branch_logits']
-                        if args.train_mask and class_mask is not None:
-                            seen_classes = [
-                                class_id
-                                for seen_task in range(task_id + 1)
-                                for class_id in class_mask[seen_task]
-                            ]
-                            unseen_classes = np.setdiff1d(
-                                np.arange(args.nb_classes), seen_classes)
-                            unseen_classes = torch.as_tensor(
-                                unseen_classes, dtype=torch.long, device=device)
-                            initial_branch_logits = initial_branch_logits.index_fill(
-                                1, unseen_classes, float('-inf'))
-                        initial_prediction = initial_branch_logits.argmax(dim=1)
-                        proposal_prediction = logits.argmax(dim=1)
-                        initial_correct = initial_prediction.eq(target)
-                        proposal_correct = proposal_prediction.eq(target)
-                        select_initial = initial_branch_confidence_dominance(
-                            initial_branch_logits, logits)
-                        dominance_prediction = torch.where(
-                            select_initial, initial_prediction,
-                            proposal_prediction)
-                        dominance_correct = dominance_prediction.eq(target)
-                        comparison_metrics = {
-                            'InitialBranchAcc@1': initial_correct.float(
-                                ).mean() * 100.0,
-                            'ProposalAuditAcc@1': proposal_correct.float(
-                                ).mean() * 100.0,
-                            'InitialProposalAgree': initial_prediction.eq(
-                                proposal_prediction).float().mean() * 100.0,
-                            'InitialOnlyCorrect': (
-                                initial_correct & ~proposal_correct
-                                ).float().mean() * 100.0,
-                            'ProposalOnlyCorrect': (
-                                proposal_correct & ~initial_correct
-                                ).float().mean() * 100.0,
-                            'InitialProposalOracleAcc@1': (
-                                initial_correct | proposal_correct
-                                ).float().mean() * 100.0,
-                            'DominanceAcc@1': dominance_correct.float(
-                                ).mean() * 100.0,
-                            'InitialSelectRate': select_initial.float(
-                                ).mean() * 100.0,
-                        }
-                        for metric_name, metric_value in comparison_metrics.items():
-                            metric_logger.meters[metric_name].update(
-                                metric_value.item(), n=input.shape[0])
-                    if bool(getattr(
-                            args, 'prediction_proposal_cross_adapter_audit', False)):
-                        candidate_logits = cost_diagnostics['candidate_logits']
-                        if args.train_mask and class_mask is not None:
-                            seen_classes = [
-                                class_id
-                                for seen_task in range(task_id + 1)
-                                for class_id in class_mask[seen_task]
-                            ]
-                            unseen_classes = np.setdiff1d(
-                                np.arange(args.nb_classes), seen_classes)
-                            unseen_classes = torch.as_tensor(
-                                unseen_classes, dtype=torch.long, device=device)
-                            candidate_logits = candidate_logits.index_fill(
-                                2, unseen_classes, float('-inf'))
-                        consensus = cross_adapter_global_consensus(
-                            candidate_logits)
-                        borda = cross_adapter_borda_consensus(
-                            candidate_logits, top_k=5)
-                        adapter_predictions = consensus[
-                            'adapter_predictions']
-                        vote_prediction = consensus['consensus_prediction']
-                        proposal_prediction = logits.argmax(dim=1)
-                        vote_correct = vote_prediction.eq(target)
-                        proposal_correct = proposal_prediction.eq(target)
-                        adapter_any_correct = adapter_predictions.eq(
-                            target.unsqueeze(1)).any(dim=1)
-                        select_vote = (
-                            consensus['strict_majority']
-                            & vote_prediction.ne(proposal_prediction)
-                        )
-                        rescue_prediction = torch.where(
-                            select_vote, vote_prediction, proposal_prediction)
-                        rescue_correct = rescue_prediction.eq(target)
-                        borda_prediction = borda['prediction']
-                        borda_correct = borda_prediction.eq(target)
-                        select_borda = (
-                            borda['strict_support']
-                            & borda_prediction.ne(proposal_prediction)
-                        )
-                        borda_rescue_prediction = torch.where(
-                            select_borda, borda_prediction,
-                            proposal_prediction)
-                        borda_rescue_correct = borda_rescue_prediction.eq(target)
-                        cross_metrics = {
-                            'CrossVoteAcc@1': vote_correct.float().mean() * 100.0,
-                            'CrossAdapterOracleAcc@1': adapter_any_correct.float(
-                                ).mean() * 100.0,
-                            'CrossVoteStrength': consensus['vote_strength'].mean(
-                                ) * 100.0,
-                            'CrossVoteOnlyCorrect': (
-                                vote_correct & ~proposal_correct
-                                ).float().mean() * 100.0,
-                            'ProposalOnlyVsCrossVote': (
-                                proposal_correct & ~vote_correct
-                                ).float().mean() * 100.0,
-                            'CrossProposalOracleAcc@1': (
-                                vote_correct | proposal_correct
-                                ).float().mean() * 100.0,
-                            'CrossRescueAcc@1': rescue_correct.float(
-                                ).mean() * 100.0,
-                            'CrossRescueRate': select_vote.float().mean() * 100.0,
-                            'CrossBordaAcc@1': borda_correct.float(
-                                ).mean() * 100.0,
-                            'CrossBordaOnlyCorrect': (
-                                borda_correct & ~proposal_correct
-                                ).float().mean() * 100.0,
-                            'ProposalOnlyVsCrossBorda': (
-                                proposal_correct & ~borda_correct
-                                ).float().mean() * 100.0,
-                            'CrossBordaProposalOracleAcc@1': (
-                                borda_correct | proposal_correct
-                                ).float().mean() * 100.0,
-                            'CrossBordaRescueAcc@1': borda_rescue_correct.float(
-                                ).mean() * 100.0,
-                            'CrossBordaRescueRate': select_borda.float(
-                                ).mean() * 100.0,
-                            'CrossBordaTop5Support': borda['topk_support'].mean(
-                                ) * 100.0,
-                        }
-                        for metric_name, metric_value in cross_metrics.items():
-                            metric_logger.meters[metric_name].update(
-                                metric_value.item(), n=input.shape[0])
-                continue
 
-            if bool(getattr(args, 'selective_rematching', False)):
-                candidate_scores = None
-                if (str(getattr(args, 'selective_candidate_source', 'tii')).lower()
-                        == 'router' and replay_task_router is not None):
-                    replay_task_router.eval()
-                    candidate_scores = replay_task_router(shared_features, old_logits)
-                logits, prompt_id, candidate_tasks, candidate_counts = selective_adapter_rematching(
-                    model=model,
-                    inputs=input,
-                    tii_logits=old_logits,
-                    class_mask=class_mask,
-                    seen_task_count=task_id + 1,
-                    args=args,
-                    candidate_scores=candidate_scores,
-                )
-                filtered_index_tensor = torch.empty(
-                    0, dtype=torch.long, device=device)
-                re_id = None
-                loss = criterion(logits, target)
-                acc1, acc5 = accuracy(logits, target, topk=(1, 5))
-                task_inference_acc = utils.task_inference_accuracy(
-                    prompt_id.unsqueeze(-1), target, target_task_map,
-                    filtered_index_tensor, re_id)
-                target_tasks = torch.as_tensor(
-                    [target_task_map[value.item()] for value in target],
-                    dtype=torch.long, device=device)
-                active_candidates = (
-                    torch.arange(candidate_tasks.shape[1], device=device).unsqueeze(0)
-                    < candidate_counts.unsqueeze(1))
-                candidate_recall = (
-                    (candidate_tasks == target_tasks.unsqueeze(1)) & active_candidates
-                ).any(dim=1).float().mean() * 100.0
-
-                metric_logger.meters['Loss'].update(loss.item())
-                metric_logger.meters['Acc@1'].update(acc1.item(), n=input.shape[0])
-                metric_logger.meters['Acc@5'].update(acc5.item(), n=input.shape[0])
-                metric_logger.meters['Acc@task'].update(
-                    task_inference_acc.item(), n=input.shape[0])
-                metric_logger.meters['CandidateRecall'].update(
-                    candidate_recall.item(), n=input.shape[0])
-                metric_logger.meters['LoRA/sample'].update(
-                    candidate_counts.float().mean().item(), n=input.shape[0])
-                continue
 
             lora_id = torch.max(old_logits, dim=1)[1]
             lora_id = torch.tensor([target_task_map[v.item()] for v in lora_id], device=device)
@@ -2210,33 +1395,7 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
                 # is the method's real cost, not the baseline's.
                 default_lora_counts += 1.0
 
-            if bool(getattr(args, 'budgeted_rematching', False)):
-                base_lora_counts = torch.ones(
-                    input.shape[0], dtype=torch.float32, device=device)
-                base_lora_counts[equal_drm] += 1.0
-                base_lora_counts[filtered_index_tensor] += 1.0
-                logits, prompt_id, fallback_mask, lora_counts = budgeted_exhaustive_fallback(
-                    model=model,
-                    inputs=input,
-                    tii_logits=old_logits,
-                    base_logits=logits,
-                    base_tasks=prompt_id,
-                    base_lora_counts=base_lora_counts,
-                    class_mask=class_mask,
-                    seen_task_count=task_id + 1,
-                    args=args,
-                )
-                filtered_index_tensor = torch.empty(
-                    0, dtype=torch.long, device=device)
-                re_id = None
-                metric_logger.meters['FallbackRate'].update(
-                    fallback_mask.float().mean().mul(100.0).item(),
-                    n=input.shape[0])
-                metric_logger.meters['LoRA/sample'].update(
-                    lora_counts.mean().item(), n=input.shape[0])
-
-
-            elif replay_task_router is not None:
+            if replay_task_router is not None:
                 prompt_id = replay_task_router.predict(shared_features, old_logits)
                 logits = model(input, task_id=prompt_id)['logits']
                 if args.train_mask and class_mask is not None:
@@ -2246,31 +1405,6 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
                     unseen = np.setdiff1d(np.arange(args.nb_classes), seen_mask)
                     unseen = torch.as_tensor(unseen, dtype=torch.long, device=device)
                     logits = logits.index_fill(1, unseen, float('-inf'))
-                filtered_index_tensor = torch.empty(0, dtype=torch.long, device=device)
-                re_id = None
-            elif shared_prototype_bank is not None:
-                logits, prompt_id = shared_space_prototype_routing(
-                    model,
-                    input,
-                    shared_features,
-                    old_logits,
-                    class_mask,
-                    task_id + 1,
-                    shared_prototype_bank,
-                    args,
-                )
-                filtered_index_tensor = torch.empty(0, dtype=torch.long, device=device)
-                re_id = None
-            elif prototype_bank is not None:
-                logits, prompt_id = prototype_assisted_rematching(
-                    model,
-                    input,
-                    old_logits,
-                    class_mask,
-                    task_id + 1,
-                    prototype_bank,
-                    args,
-                )
                 filtered_index_tensor = torch.empty(0, dtype=torch.long, device=device)
                 re_id = None
             else:
@@ -2371,16 +1505,6 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
                      .format(u=metric_logger.meters['Undecided'],
                              c=metric_logger.meters['ConfRP']))
         print(line)
-    if bool(getattr(args, 'budgeted_rematching', False)):
-        print(
-            '* Budgeted FallbackRate {rate.global_avg:.3f} LoRA/sample {cost.global_avg:.3f}'
-            .format(rate=metric_logger.meters['FallbackRate'],
-                    cost=metric_logger.meters['LoRA/sample']))
-    if bool(getattr(args, 'selective_rematching', False)):
-        print(
-            '* Selective CandidateRecall {recall.global_avg:.3f} LoRA/sample {cost.global_avg:.3f}'
-            .format(recall=metric_logger.meters['CandidateRecall'],
-                    cost=metric_logger.meters['LoRA/sample']))
     if bool(getattr(args, 'progressive_rematching', False)):
         print(
             '* Progressive Stage1Stop {stage1.global_avg:.3f} Stage2Stop {stage2.global_avg:.3f} '
@@ -2390,21 +1514,6 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
                 stage2=metric_logger.meters['Stage2StopRate'],
                 fallback=metric_logger.meters['FullFallbackRate'],
                 cost=metric_logger.meters['LoRA/sample']))
-    if bool(getattr(args, 'progressive_oracle_audit', False)):
-        print(
-            '* OracleAudit WinnerRecall@2 {winner2.global_avg:.3f} '
-            'WinnerRecall@4 {winner4.global_avg:.3f} '
-            'ExactAgreement@2 {agree2.global_avg:.3f} '
-            'ExactAgreement@4 {agree4.global_avg:.3f} '
-            'OracleLoRA/sample {oracle_cost.global_avg:.3f} '
-            'ActualLoRA/sample {actual_cost.global_avg:.3f}'
-            .format(
-                winner2=metric_logger.meters['WinnerRecall@2'],
-                winner4=metric_logger.meters['WinnerRecall@4'],
-                agree2=metric_logger.meters['ExactAgreement@2'],
-                agree4=metric_logger.meters['ExactAgreement@4'],
-                oracle_cost=metric_logger.meters['OracleLoRA/sample'],
-                actual_cost=metric_logger.meters['ActualLoRA/sample']))
     if bool(getattr(args, 'stage_drift_audit', False)):
         print(
             '* StageDriftAudit OwnLocalAcc@1 {local_acc.global_avg:.3f} '
@@ -2538,22 +1647,6 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
                 agreement=metric_logger.meters['ProposalExactAgreement'],
                 new_winner=metric_logger.meters['ProposalNewWinner'],
                 cost=metric_logger.meters['ProposalLoRA/sample']))
-    if bool(getattr(args, 'progressive_prediction_closure_audit', False)):
-        print(
-            '* PredictionClosureAudit WinnerRecall '
-            '{recall.global_avg:.3f} ExactAgreement '
-            '{agreement.global_avg:.3f} Top5Coverage '
-            '{top5.global_avg:.3f} FullScanRate '
-            '{full_scan.global_avg:.3f} LoRA/sample '
-            '{cost.global_avg:.3f} ForwardCalls/sample '
-            '{calls.global_avg:.3f}'
-            .format(
-                recall=metric_logger.meters['ClosureWinnerRecall'],
-                agreement=metric_logger.meters['ClosureExactAgreement'],
-                top5=metric_logger.meters['ClosureTop5Coverage'],
-                full_scan=metric_logger.meters['ClosureFullScanRate'],
-                cost=metric_logger.meters['ClosureLoRA/sample'],
-                calls=metric_logger.meters['ClosureCalls/sample']))
     if bool(getattr(
             args, 'progressive_prediction_beam_closure_audit', False)):
         print(
@@ -2619,136 +1712,6 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
                     'ConsensusClosureCertifiedRate'],
                 cost=metric_logger.meters['ConsensusClosureLoRA/sample'],
                 calls=metric_logger.meters['ConsensusClosureCalls/sample']))
-    if bool(getattr(args, 'prediction_closure_rematching', False)):
-        print(
-            '* PredictionClosureTail LoRA/sample {cost.global_avg:.3f} '
-            'ForwardCalls/sample {calls.global_avg:.3f}'
-            .format(cost=metric_logger.meters['LoRA/sample'],
-                    calls=metric_logger.meters['ForwardCalls/sample']))
-    if bool(getattr(args, 'prediction_proposal_rematching', False)):
-        print(
-            '* PredictionProposal LoRA/sample {cost.global_avg:.3f} '
-            'ForwardCalls/sample {calls.global_avg:.3f}'
-            .format(cost=metric_logger.meters['LoRA/sample'],
-                    calls=metric_logger.meters['ForwardCalls/sample']))
-        if bool(getattr(
-                args, 'prediction_proposal_initial_branch_audit', False)):
-            print(
-                '* InitialProposalAudit InitialBranchAcc@1 '
-                '{initial.global_avg:.3f} ProposalAcc@1 '
-                '{proposal.global_avg:.3f} Agree {agree.global_avg:.3f} '
-                'InitialOnly {initial_only.global_avg:.3f} '
-                'ProposalOnly {proposal_only.global_avg:.3f} '
-                'OracleAcc@1 {oracle.global_avg:.3f} '
-                'DominanceAcc@1 {dominance.global_avg:.3f} '
-                'InitialSelectRate {select_rate.global_avg:.3f}'
-                .format(
-                    initial=metric_logger.meters['InitialBranchAcc@1'],
-                    proposal=metric_logger.meters['ProposalAuditAcc@1'],
-                    agree=metric_logger.meters['InitialProposalAgree'],
-                    initial_only=metric_logger.meters[
-                        'InitialOnlyCorrect'],
-                    proposal_only=metric_logger.meters['ProposalOnlyCorrect'],
-                    oracle=metric_logger.meters[
-                        'InitialProposalOracleAcc@1'],
-                    dominance=metric_logger.meters['DominanceAcc@1'],
-                    select_rate=metric_logger.meters['InitialSelectRate']))
-    if bool(getattr(args, 'prediction_proposal_cross_adapter_audit', False)):
-        print(
-            '* CrossAdapterAudit VoteAcc@1 {vote.global_avg:.3f} '
-            'AdapterOracleAcc@1 {adapter_oracle.global_avg:.3f} '
-            'VoteStrength {strength.global_avg:.3f} '
-            'VoteOnly {vote_only.global_avg:.3f} '
-            'ProposalOnly {proposal_only.global_avg:.3f} '
-            'ProposalVoteOracleAcc@1 {proposal_oracle.global_avg:.3f} '
-            'RescueAcc@1 {rescue.global_avg:.3f} '
-            'RescueRate {rescue_rate.global_avg:.3f}'
-            .format(
-                vote=metric_logger.meters['CrossVoteAcc@1'],
-                adapter_oracle=metric_logger.meters[
-                    'CrossAdapterOracleAcc@1'],
-                strength=metric_logger.meters['CrossVoteStrength'],
-                vote_only=metric_logger.meters['CrossVoteOnlyCorrect'],
-                proposal_only=metric_logger.meters[
-                    'ProposalOnlyVsCrossVote'],
-                proposal_oracle=metric_logger.meters[
-                    'CrossProposalOracleAcc@1'],
-                rescue=metric_logger.meters['CrossRescueAcc@1'],
-                rescue_rate=metric_logger.meters['CrossRescueRate']))
-        print(
-            '* CrossBordaAudit BordaAcc@1 {borda.global_avg:.3f} '
-            'BordaOnly {borda_only.global_avg:.3f} '
-            'ProposalOnly {proposal_only.global_avg:.3f} '
-            'ProposalBordaOracleAcc@1 {oracle.global_avg:.3f} '
-            'BordaRescueAcc@1 {rescue.global_avg:.3f} '
-            'BordaRescueRate {rate.global_avg:.3f} '
-            'BordaTop5Support {support.global_avg:.3f}'
-            .format(
-                borda=metric_logger.meters['CrossBordaAcc@1'],
-                borda_only=metric_logger.meters[
-                    'CrossBordaOnlyCorrect'],
-                proposal_only=metric_logger.meters[
-                    'ProposalOnlyVsCrossBorda'],
-                oracle=metric_logger.meters[
-                    'CrossBordaProposalOracleAcc@1'],
-                rescue=metric_logger.meters['CrossBordaRescueAcc@1'],
-                rate=metric_logger.meters['CrossBordaRescueRate'],
-                support=metric_logger.meters['CrossBordaTop5Support']))
-    if bool(getattr(args, 'vectorized_exhaustive_rematching', False)):
-        print(
-            '* VectorizedExhaustive LoRA/sample {cost.global_avg:.3f} '
-            'ForwardCalls/sample {calls.global_avg:.3f}'
-            .format(cost=metric_logger.meters['LoRA/sample'],
-                    calls=metric_logger.meters['ForwardCalls/sample']))
-    if (bool(getattr(args, 'soft_mixture_rematching', False))
-            or bool(getattr(args, 'soft_mixture_hard_rematching', False))
-            or bool(getattr(args, 'soft_hard_selector_rematching', False))
-            or bool(getattr(args, 'soft_local_hard_refinement', False))):
-        if bool(getattr(args, 'soft_local_hard_refinement', False)):
-            mixture_name = 'SoftLocalHardRefinement'
-        elif bool(getattr(args, 'soft_hard_selector_rematching', False)):
-            mixture_name = 'SoftHardSelector'
-        elif bool(getattr(args, 'soft_mixture_hard_rematching', False)):
-            mixture_name = 'SoftHard'
-        else:
-            mixture_name = 'SoftMixture'
-        print(
-            '* {name} LoRA/sample {cost.global_avg:.3f} '
-            'ForwardCalls/sample {calls.global_avg:.3f}'
-            .format(name=mixture_name, cost=metric_logger.meters['LoRA/sample'],
-                    calls=metric_logger.meters['ForwardCalls/sample']))
-        if bool(getattr(args, 'soft_hard_selector_rematching', False)):
-            print(
-                '* SelectorAudit SoftAcc@1 {soft.global_avg:.3f} '
-                'HardAcc@1 {hard.global_avg:.3f} '
-                'Agree {agree.global_avg:.3f} '
-                'SoftOnly {soft_only.global_avg:.3f} '
-                'HardOnly {hard_only.global_avg:.3f} '
-                'OracleAcc@1 {oracle.global_avg:.3f} '
-                'HardSelectRate {select.global_avg:.3f}'
-                .format(
-                    soft=metric_logger.meters['SoftAcc@1'],
-                    hard=metric_logger.meters['HardAcc@1'],
-                    agree=metric_logger.meters['SoftHardAgree'],
-                    soft_only=metric_logger.meters['SoftOnlyCorrect'],
-                    hard_only=metric_logger.meters['HardOnlyCorrect'],
-                    oracle=metric_logger.meters['OracleAcc@1'],
-                    select=metric_logger.meters['HardSelectRate']))
-        if bool(getattr(args, 'soft_local_hard_refinement', False)):
-            print(
-                '* RefinementAudit SoftAcc@1 {soft.global_avg:.3f} '
-                'RefinedAcc@1 {refined.global_avg:.3f} '
-                'Agree {agree.global_avg:.3f} '
-                'SoftOnly {soft_only.global_avg:.3f} '
-                'RefineOnly {refine_only.global_avg:.3f} '
-                'OracleAcc@1 {oracle.global_avg:.3f}'
-                .format(
-                    soft=metric_logger.meters['RefineSoftAcc@1'],
-                    refined=metric_logger.meters['RefinedAcc@1'],
-                    agree=metric_logger.meters['SoftRefineAgree'],
-                    soft_only=metric_logger.meters['RefineSoftOnlyCorrect'],
-                    refine_only=metric_logger.meters['RefineOnlyCorrect'],
-                    oracle=metric_logger.meters['RefineOracleAcc@1']))
     if bool(getattr(args, 'calibrated_progressive_rematching', False)):
         print(
             '* CalibratedProgressive Stage1Stop {stage1.global_avg:.3f} '
@@ -2787,20 +1750,11 @@ def evaluate_till_now(model: torch.nn.Module, original_model: torch.nn.Module, d
         stat_matrix[4, i] = test_stats.get('CandidateRecall', 0.0)
         stat_matrix[5, i] = test_stats.get('LoRA/sample', 0.0)
         stat_matrix[6, i] = test_stats.get('FallbackRate', 0.0)
-        if bool(getattr(args, 'budgeted_rematching', False)):
-            stat_matrix[7, i] = test_stats.get('LoRA/sample', 0.0)
         if bool(getattr(args, 'progressive_rematching', False)):
             stat_matrix[7, i] = test_stats.get('Stage1StopRate', 0.0)
             stat_matrix[8, i] = test_stats.get('Stage2StopRate', 0.0)
             stat_matrix[9, i] = test_stats.get('FullFallbackRate', 0.0)
             stat_matrix[10, i] = test_stats.get('LoRA/sample', 0.0)
-        if bool(getattr(args, 'progressive_oracle_audit', False)):
-            stat_matrix[11, i] = test_stats.get('WinnerRecall@2', 0.0)
-            stat_matrix[12, i] = test_stats.get('WinnerRecall@4', 0.0)
-            stat_matrix[13, i] = test_stats.get('ExactAgreement@2', 0.0)
-            stat_matrix[14, i] = test_stats.get('ExactAgreement@4', 0.0)
-            stat_matrix[15, i] = test_stats.get('OracleLoRA/sample', 0.0)
-            stat_matrix[16, i] = test_stats.get('ActualLoRA/sample', 0.0)
         if bool(getattr(args, 'rp_route_audit', False)):
             for offset, name in enumerate((
                     'RouteTII', 'RouteRP', 'RouteUnion', 'RouteBoth',
@@ -2853,14 +1807,6 @@ def evaluate_till_now(model: torch.nn.Module, original_model: torch.nn.Module, d
             stat_matrix[46, i] = test_stats.get('ProposalExactAgreement', 0.0)
             stat_matrix[47, i] = test_stats.get('ProposalLoRA/sample', 0.0)
             stat_matrix[48, i] = test_stats.get('ProposalNewWinner', 0.0)
-        if bool(getattr(args, 'progressive_prediction_closure_audit', False)):
-            stat_matrix[72, i] = test_stats.get('ClosureWinnerRecall', 0.0)
-            stat_matrix[73, i] = test_stats.get('ClosureExactAgreement', 0.0)
-            stat_matrix[74, i] = test_stats.get('ClosureTop5Coverage', 0.0)
-            stat_matrix[75, i] = test_stats.get('ClosureFullScanRate', 0.0)
-            stat_matrix[76, i] = test_stats.get('ClosureLoRA/sample', 0.0)
-            stat_matrix[77, i] = test_stats.get(
-                'ClosureCalls/sample', 0.0)
         if bool(getattr(
                 args, 'progressive_prediction_beam_closure_audit', False)):
             stat_matrix[78, i] = test_stats.get(
@@ -2971,72 +1917,6 @@ def evaluate_till_now(model: torch.nn.Module, original_model: torch.nn.Module, d
                 'OwnerHedgeLoRA/sample', 0.0)
             stat_matrix[129, i] = test_stats.get(
                 'OwnerHedgeCalls/sample', 0.0)
-        if (bool(getattr(args, 'vectorized_exhaustive_rematching', False))
-                or bool(getattr(args, 'prediction_proposal_rematching', False))
-                or bool(getattr(args, 'prediction_closure_rematching', False))):
-            stat_matrix[28, i] = test_stats.get('LoRA/sample', 0.0)
-            stat_matrix[29, i] = test_stats.get('ForwardCalls/sample', 0.0)
-        if bool(getattr(
-                args, 'prediction_proposal_initial_branch_audit', False)):
-            stat_matrix[49, i] = test_stats.get('InitialBranchAcc@1', 0.0)
-            stat_matrix[50, i] = test_stats.get('ProposalAuditAcc@1', 0.0)
-            stat_matrix[51, i] = test_stats.get(
-                'InitialProposalAgree', 0.0)
-            stat_matrix[52, i] = test_stats.get(
-                'InitialOnlyCorrect', 0.0)
-            stat_matrix[53, i] = test_stats.get('ProposalOnlyCorrect', 0.0)
-            stat_matrix[54, i] = test_stats.get(
-                'InitialProposalOracleAcc@1', 0.0)
-            stat_matrix[55, i] = test_stats.get('DominanceAcc@1', 0.0)
-            stat_matrix[56, i] = test_stats.get('InitialSelectRate', 0.0)
-        if bool(getattr(
-                args, 'prediction_proposal_cross_adapter_audit', False)):
-            stat_matrix[57, i] = test_stats.get('CrossVoteAcc@1', 0.0)
-            stat_matrix[58, i] = test_stats.get(
-                'CrossAdapterOracleAcc@1', 0.0)
-            stat_matrix[59, i] = test_stats.get('CrossVoteStrength', 0.0)
-            stat_matrix[60, i] = test_stats.get(
-                'CrossVoteOnlyCorrect', 0.0)
-            stat_matrix[61, i] = test_stats.get(
-                'ProposalOnlyVsCrossVote', 0.0)
-            stat_matrix[62, i] = test_stats.get(
-                'CrossProposalOracleAcc@1', 0.0)
-            stat_matrix[63, i] = test_stats.get('CrossRescueAcc@1', 0.0)
-            stat_matrix[64, i] = test_stats.get('CrossRescueRate', 0.0)
-            stat_matrix[65, i] = test_stats.get('CrossBordaAcc@1', 0.0)
-            stat_matrix[66, i] = test_stats.get(
-                'CrossBordaOnlyCorrect', 0.0)
-            stat_matrix[67, i] = test_stats.get(
-                'ProposalOnlyVsCrossBorda', 0.0)
-            stat_matrix[68, i] = test_stats.get(
-                'CrossBordaProposalOracleAcc@1', 0.0)
-            stat_matrix[69, i] = test_stats.get(
-                'CrossBordaRescueAcc@1', 0.0)
-            stat_matrix[70, i] = test_stats.get(
-                'CrossBordaRescueRate', 0.0)
-            stat_matrix[71, i] = test_stats.get(
-                'CrossBordaTop5Support', 0.0)
-        if (bool(getattr(args, 'soft_mixture_rematching', False))
-                or bool(getattr(args, 'soft_mixture_hard_rematching', False))
-                or bool(getattr(args, 'soft_hard_selector_rematching', False))
-                or bool(getattr(args, 'soft_local_hard_refinement', False))):
-            stat_matrix[30, i] = test_stats.get('LoRA/sample', 0.0)
-            stat_matrix[31, i] = test_stats.get('ForwardCalls/sample', 0.0)
-        if bool(getattr(args, 'soft_hard_selector_rematching', False)):
-            stat_matrix[32, i] = test_stats.get('SoftAcc@1', 0.0)
-            stat_matrix[33, i] = test_stats.get('HardAcc@1', 0.0)
-            stat_matrix[34, i] = test_stats.get('SoftHardAgree', 0.0)
-            stat_matrix[35, i] = test_stats.get('SoftOnlyCorrect', 0.0)
-            stat_matrix[36, i] = test_stats.get('HardOnlyCorrect', 0.0)
-            stat_matrix[37, i] = test_stats.get('OracleAcc@1', 0.0)
-            stat_matrix[38, i] = test_stats.get('HardSelectRate', 0.0)
-        if bool(getattr(args, 'soft_local_hard_refinement', False)):
-            stat_matrix[39, i] = test_stats.get('RefineSoftAcc@1', 0.0)
-            stat_matrix[40, i] = test_stats.get('RefinedAcc@1', 0.0)
-            stat_matrix[41, i] = test_stats.get('SoftRefineAgree', 0.0)
-            stat_matrix[42, i] = test_stats.get('RefineSoftOnlyCorrect', 0.0)
-            stat_matrix[43, i] = test_stats.get('RefineOnlyCorrect', 0.0)
-            stat_matrix[44, i] = test_stats.get('RefineOracleAcc@1', 0.0)
         if bool(getattr(args, 'calibrated_progressive_rematching', False)):
             stat_matrix[7, i] = test_stats.get('Stage1StopRate', 0.0)
             stat_matrix[8, i] = test_stats.get('Stage2StopRate', 0.0)
@@ -3056,25 +1936,11 @@ def evaluate_till_now(model: torch.nn.Module, original_model: torch.nn.Module, d
         avg_stat[0],
         avg_stat[1],
         avg_stat[2])
-    if bool(getattr(args, 'budgeted_rematching', False)):
-        result_str += "\tFallbackRate: {:.4f}\tLoRA/sample: {:.4f}".format(
-            avg_stat[6], avg_stat[7])
-    if bool(getattr(args, 'selective_rematching', False)):
-        result_str += "\tCandidateRecall: {:.4f}\tLoRA/sample: {:.4f}".format(
-            avg_stat[4], avg_stat[5])
     if bool(getattr(args, 'progressive_rematching', False)):
         result_str += (
             "\tStage1Stop: {:.4f}\tStage2Stop: {:.4f}"
             "\tFullFallback: {:.4f}\tLoRA/sample: {:.4f}"
         ).format(avg_stat[7], avg_stat[8], avg_stat[9], avg_stat[10])
-    if bool(getattr(args, 'progressive_oracle_audit', False)):
-        result_str += (
-            "\tWinnerRecall@2: {:.4f}\tWinnerRecall@4: {:.4f}"
-            "\tExactAgreement@2: {:.4f}\tExactAgreement@4: {:.4f}"
-            "\tOracleLoRA/sample: {:.4f}\tActualLoRA/sample: {:.4f}"
-        ).format(
-            avg_stat[11], avg_stat[12], avg_stat[13], avg_stat[14],
-            avg_stat[15], avg_stat[16])
     if bool(getattr(args, 'rp_route_audit', False)):
         result_str += "	RouteTII: {:.4f}	RouteRP: {:.4f}	RouteUnion: {:.4f}	RouteBoth: {:.4f}	RouteAgree: {:.4f}	RouteRPOnly: {:.4f}".format(
             *[np.mean(stat_matrix[124 + k, :task_id + 1]) for k in range(6)])
@@ -3129,17 +1995,6 @@ def evaluate_till_now(model: torch.nn.Module, original_model: torch.nn.Module, d
             "\tProposalLoRA/sample: {:.4f}"
             "\tProposalNewWinner: {:.4f}"
         ).format(avg_stat[45], avg_stat[46], avg_stat[47], avg_stat[48])
-    if bool(getattr(args, 'progressive_prediction_closure_audit', False)):
-        result_str += (
-            "\tClosureWinnerRecall: {:.4f}"
-            "\tClosureExactAgreement: {:.4f}"
-            "\tClosureTop5Coverage: {:.4f}"
-            "\tClosureFullScanRate: {:.4f}"
-            "\tClosureLoRA/sample: {:.4f}"
-            "\tClosureCalls/sample: {:.4f}"
-        ).format(
-            avg_stat[72], avg_stat[73], avg_stat[74], avg_stat[75],
-            avg_stat[76], avg_stat[77])
     if bool(getattr(
             args, 'progressive_prediction_beam_closure_audit', False)):
         result_str += (
@@ -3236,70 +2091,6 @@ def evaluate_till_now(model: torch.nn.Module, original_model: torch.nn.Module, d
         ).format(
             avg_stat[123], avg_stat[124], avg_stat[125],
             avg_stat[126], avg_stat[127], avg_stat[128], avg_stat[129])
-    if (bool(getattr(args, 'vectorized_exhaustive_rematching', False))
-            or bool(getattr(args, 'prediction_proposal_rematching', False))
-            or bool(getattr(args, 'prediction_closure_rematching', False))):
-        result_str += (
-            "\tLoRA/sample: {:.4f}\tForwardCalls/sample: {:.4f}"
-        ).format(avg_stat[28], avg_stat[29])
-    if bool(getattr(args, 'prediction_proposal_initial_branch_audit', False)):
-        result_str += (
-            "\tInitialBranchAcc@1: {:.4f}\tProposalAuditAcc@1: {:.4f}"
-            "\tInitialProposalAgree: {:.4f}"
-            "\tInitialOnlyCorrect: {:.4f}"
-            "\tProposalOnlyCorrect: {:.4f}"
-            "\tInitialProposalOracleAcc@1: {:.4f}"
-            "\tDominanceAcc@1: {:.4f}"
-            "\tInitialSelectRate: {:.4f}"
-        ).format(
-            avg_stat[49], avg_stat[50], avg_stat[51], avg_stat[52],
-            avg_stat[53], avg_stat[54], avg_stat[55], avg_stat[56])
-    if bool(getattr(args, 'prediction_proposal_cross_adapter_audit', False)):
-        result_str += (
-            "\tCrossVoteAcc@1: {:.4f}"
-            "\tCrossAdapterOracleAcc@1: {:.4f}"
-            "\tCrossVoteStrength: {:.4f}"
-            "\tCrossVoteOnlyCorrect: {:.4f}"
-            "\tProposalOnlyVsCrossVote: {:.4f}"
-            "\tCrossProposalOracleAcc@1: {:.4f}"
-            "\tCrossRescueAcc@1: {:.4f}"
-            "\tCrossRescueRate: {:.4f}"
-            "\tCrossBordaAcc@1: {:.4f}"
-            "\tCrossBordaOnlyCorrect: {:.4f}"
-            "\tProposalOnlyVsCrossBorda: {:.4f}"
-            "\tCrossBordaProposalOracleAcc@1: {:.4f}"
-            "\tCrossBordaRescueAcc@1: {:.4f}"
-            "\tCrossBordaRescueRate: {:.4f}"
-            "\tCrossBordaTop5Support: {:.4f}"
-        ).format(
-            avg_stat[57], avg_stat[58], avg_stat[59], avg_stat[60],
-            avg_stat[61], avg_stat[62], avg_stat[63], avg_stat[64],
-            avg_stat[65], avg_stat[66], avg_stat[67], avg_stat[68],
-            avg_stat[69], avg_stat[70], avg_stat[71])
-    if (bool(getattr(args, 'soft_mixture_rematching', False))
-            or bool(getattr(args, 'soft_mixture_hard_rematching', False))
-            or bool(getattr(args, 'soft_hard_selector_rematching', False))
-            or bool(getattr(args, 'soft_local_hard_refinement', False))):
-        result_str += (
-            "\tLoRA/sample: {:.4f}\tForwardCalls/sample: {:.4f}"
-        ).format(avg_stat[30], avg_stat[31])
-    if bool(getattr(args, 'soft_hard_selector_rematching', False)):
-        result_str += (
-            "\tSoftAcc@1: {:.4f}\tHardAcc@1: {:.4f}"
-            "\tSoftHardAgree: {:.4f}\tSoftOnlyCorrect: {:.4f}"
-            "\tHardOnlyCorrect: {:.4f}\tOracleAcc@1: {:.4f}"
-            "\tHardSelectRate: {:.4f}"
-        ).format(
-            avg_stat[32], avg_stat[33], avg_stat[34], avg_stat[35],
-            avg_stat[36], avg_stat[37], avg_stat[38])
-    if bool(getattr(args, 'soft_local_hard_refinement', False)):
-        result_str += (
-            "\tRefineSoftAcc@1: {:.4f}\tRefinedAcc@1: {:.4f}"
-            "\tSoftRefineAgree: {:.4f}\tRefineSoftOnlyCorrect: {:.4f}"
-            "\tRefineOnlyCorrect: {:.4f}\tRefineOracleAcc@1: {:.4f}"
-        ).format(
-            avg_stat[39], avg_stat[40], avg_stat[41], avg_stat[42],
-            avg_stat[43], avg_stat[44])
     if bool(getattr(args, 'calibrated_progressive_rematching', False)):
         result_str += (
             "\tStage1Stop: {:.4f}\tStage2Stop: {:.4f}"
@@ -3347,18 +2138,6 @@ def train_and_evaluate(model: torch.nn.Module, model_without_ddp: torch.nn.Modul
         if utils.is_main_process():
             print('Limiting run to', task_count, 'of', args.num_tasks, 'tasks')
     for task_id in range(task_count):
-        replay_anchor_memory = None
-        if task_id > 0 and bool(getattr(args, 'replay_anchor_ctird', False)):
-            old_classes = [
-                int(class_id)
-                for previous_task in range(task_id)
-                for class_id in class_mask[previous_task]
-            ]
-            replay_anchor_memory = build_replay_anchor_memory(args, old_classes)
-            if replay_anchor_memory.empty:
-                raise RuntimeError(
-                    'Replay-Anchored CTIRD is enabled but no cached pseudo-images '
-                    'were found for tasks before task {}.'.format(task_id + 1))
         previous_fc_norm = None
         if norm_blend_enabled and task_id > 0:
             previous_fc_norm = {
@@ -3423,8 +2202,7 @@ def train_and_evaluate(model: torch.nn.Module, model_without_ddp: torch.nn.Modul
                                             data_loader=data_loader[task_id]['train'], optimizer=optimizer,
                                             device=device, epoch=epoch, max_norm=args.clip_grad,
                                             set_training_mode=True, task_id=task_id, class_mask=class_mask,
-                                            target_task_map=target_task_map, args=args, old_features=old_features,
-                                            replay_anchor_memory=replay_anchor_memory)
+                                            target_task_map=target_task_map, args=args, old_features=old_features)
 
             if lr_scheduler:
                 lr_scheduler.step(epoch)
@@ -3539,18 +2317,6 @@ def train_and_evaluate(model: torch.nn.Module, model_without_ddp: torch.nn.Modul
                     'bias=', task_logit_calibration_state['bias'],
                 )
 
-        if (bool(getattr(args, 'replay_anchor_ctird', False))
-                and task_id + 1 < task_count):
-            generate_task_replay_cache(
-                model=model_without_ddp,
-                task_id=task_id,
-                class_ids=class_mask[task_id],
-                cls_mean=cls_mean,
-                cls_cov=cls_cov,
-                cls_cfs_model=cls_cfs_model,
-                args=args,
-                device=device,
-            )
         
         test_stats = evaluate_till_now(model=model, original_model=original_model, data_loader=data_loader,
                                        device=device,
@@ -3584,17 +2350,6 @@ def train_and_evaluate(model: torch.nn.Module, model_without_ddp: torch.nn.Modul
                         'CFS task-logit calibration state was not fitted')
                 state_dict['cfs_task_logit_calibration'] = copy.deepcopy(
                     task_logit_calibration_state)
-            if bool(getattr(args, 'replay_anchor_ctird', False)):
-                state_dict['replay_anchor_cache'] = {
-                    'version': 1,
-                    'images_per_class': int(getattr(
-                        args, 'replay_anchor_images_per_class', 5)),
-                    'classes': [
-                        int(class_id)
-                        for seen_task in range(task_id + 1)
-                        for class_id in class_mask[seen_task]
-                    ],
-                }
             if args.sched is not None and args.sched != 'constant':
                 state_dict['lr_scheduler'] = lr_scheduler.state_dict()
 
@@ -4937,60 +3692,7 @@ def train_task_adaptive_prediction(model: torch.nn.Module, args, device,
         parameter.requires_grad_(requires_grad)
 
 
-def orth_loss(features, targets, device, args):
-    if cls_mean:
-        # orth loss of this batch
-        sample_mean = []
-        for k, v in cls_mean.items():
-            if isinstance(v, list):
-                sample_mean.extend(v)
-            else:
-                sample_mean.append(v)
-        sample_mean = torch.stack(sample_mean, dim=0).to(device, non_blocking=True)
-        M = torch.cat([sample_mean, features], dim=0)
-        sim = torch.matmul(M, M.t()) / 0.8
-        loss = torch.nn.functional.cross_entropy(sim, torch.range(0, sim.shape[0] - 1).long().to(device))
-        # print(loss)
-        return args.reg * loss
-    else:
-        sim = torch.matmul(features, features.t()) / 0.8
-        loss = torch.nn.functional.cross_entropy(sim, torch.range(0, sim.shape[0] - 1).long().to(device))
-        return args.reg * loss
         # return 0.
 
-def add_gaussian_noise(tensor, mean=0., std=1.):
-    noise = torch.randn_like(tensor) * std + mean
-    tensor_noisy = tensor + 0.01*noise
-    return tensor_noisy
 
 
-def robust_loss(model, inputs, features, targets, devices, task_id, class_mask,index):
-    all_old_logits = []
-    bs = inputs.shape[0]
-    mask = []
-    for i in range(task_id+1):
-        mask.extend(class_mask[i])
-
-    
-    for k in range(index.shape[1]):
-        prompt_id = index[:,k]
-        with torch.no_grad():
-
-            output = model(inputs, task_id=prompt_id)
-            
-            old_logits = output['features']
-        old_logits = 1*old_logits+0.0*features
-
-
-        old_norm_features = F.normalize(output['features'], p=2, dim=1)
-        old_similarity_matrix = torch.mm(old_norm_features, old_norm_features.t())
-        # old_similarity_matrix.fill_diagonal_(1)
-        old_similarity_matrix = torch.exp(old_similarity_matrix)
-        old_similarity_matrix = old_similarity_matrix / old_similarity_matrix.sum(1, keepdim=True)
-        #old_logits = F.softmax(old_logits,dim=1)
-        #all_old_logits.append(old_logits)
-        all_old_logits.append(old_similarity_matrix)
-
-    
-    output = all_old_logits
-    return output

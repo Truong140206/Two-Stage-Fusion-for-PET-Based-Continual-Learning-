@@ -20,10 +20,8 @@ for some einops/einsum fun
 import math
 import inspect
 import logging
-from copy import deepcopy
 from functools import partial
 from collections import OrderedDict
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -1315,29 +1313,6 @@ def vit_base_patch16_18x2_224(pretrained=False, **kwargs):
     return model
 
 
-@register_model
-def vit_base_patch16_224_deit(pretrained=False, **kwargs):
-    """ ViT-Base model (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
-    ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
-    NOTE: this model has valid 21k classifier head and no representation (pre-logits) layer
-    """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, **kwargs)
-    model = _create_vision_transformer('vit_base_patch16_224_in21k', pretrained=False, **model_kwargs)
-    #del model.head
-    state_dict = model.state_dict()
-    ckpt = torch.load('./checkpoints/deit_base_patch16_224-b5f2ef4d.pth', map_location='cpu', weights_only=False)['model']
-    not_in_k = [k for k in ckpt.keys() if k not in state_dict.keys()]
-    head = [k for k in ckpt.keys() if 'head' in k]
-    for k in not_in_k:
-        del ckpt[k]
-    for k in head:
-        del ckpt[k]
-    state_dict.update(ckpt)
-    model.load_state_dict(state_dict)
-    # del model.norm
-    # model.norm = nn.LayerNorm(768)
-    return model
 
 
 # add dino
@@ -1445,23 +1420,3 @@ def vit_base_patch16_224_mae(pretrained=False, **kwargs):
     # model.norm = nn.LayerNorm(768)
     return model
 
-@register_model
-def vit_small_patch16_224_ims(pretrained=False, **kwargs):
-    model_kwargs = dict(
-        patch_size=16, embed_dim=384, depth=12, num_heads=6, **kwargs)
-    model = _create_vision_transformer('vit_small_patch16_224_in21k', pretrained=False, **model_kwargs)
-    #del model.head
-    state_dict = model.state_dict()
-    ckpt = torch.load('./checkpoints/best_checkpoint.pth', map_location='cpu', weights_only=False)['model']
-    ckpt_keys = ckpt.keys()
-    not_in_k = [k for k in ckpt.keys() if k not in state_dict.keys()]
-    head = [k for k in ckpt.keys() if 'head' in k]
-    for k in head:
-        del ckpt[k]
-    for k in not_in_k:
-        del ckpt[k]
-    state_dict.update(ckpt)
-    model.load_state_dict(state_dict)
-    # del model.norm
-    # model.norm = nn.LayerNorm(768)
-    return model

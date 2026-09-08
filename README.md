@@ -44,10 +44,11 @@ tests/                   unit tests for the fusion and the exemplar-free protoco
 reports/                 the paper, English and Vietnamese
 ```
 
-`engines/` carries more modules than the two stages need. They are reachable
-from `main.py` through the trainer's imports, so they are kept rather than
-removed piecemeal; the fusion described in the paper is confined to
-`hrm_lora_wtp_and_tap_engine.py` and `random_projection_head.py`.
+The fusion described in the paper is confined to two files:
+`engines/hrm_lora_wtp_and_tap_engine.py` holds both stages, and
+`engines/random_projection_head.py` holds the projection head. Every module in
+this tree is reachable from `main.py`, a test, or a script under `tools/`;
+the directions we tried and abandoned are not here.
 
 ## Requirements
 

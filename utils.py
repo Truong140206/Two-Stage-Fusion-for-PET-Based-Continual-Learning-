@@ -3,7 +3,6 @@ Misc functions, including distributed helpers.
 
 Mostly copy-paste from torchvision references.
 """
-import io
 import os
 import time
 import math
@@ -194,14 +193,6 @@ class MetricLogger(object):
             header, total_time_str, total_time / len(iterable)))
 
 
-def _load_checkpoint_for_ema(model_ema, checkpoint):
-    """
-    Workaround for ModelEma._load_checkpoint to accept an already-loaded object
-    """
-    mem_file = io.BytesIO()
-    torch.save({'state_dict_ema':checkpoint}, mem_file)
-    mem_file.seek(0)
-    model_ema._load_checkpoint(mem_file)
 
 
 def setup_for_distributed(is_master):
