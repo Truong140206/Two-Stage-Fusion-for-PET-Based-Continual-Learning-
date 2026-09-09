@@ -1,21 +1,25 @@
+% !TeX program = xelatex
 % This paper follows the LLNCS macro package for Springer Computer Science
 % proceedings; based on samplepaper.tex, Version 2.21 of 2022/01/12.
 %
-% English edition of reports/lncs_phuong_phap.tex. The Vietnamese file is kept
-% as-is; the two are meant to stay in step, so a change to one belongs in the
-% other as well.
+% English submission edition. The Vietnamese historical draft is not synced.
+%
+% Structure follows the supervisor's request: Introduction, Related Work,
+% Method, Experiments (setup, main table, comparison, grid, ablation, weight
+% sensitivity, limitations), Conclusion.
 %
 \documentclass[runningheads]{llncs}
 %
-% ---------------------------------------------------------------------
-% FONT ENCODING
-% The body of this paper is English, for which the sample's [T1] would be
-% correct. We keep [T5] for one reason only: the author names carry Vietnamese
-% diacritics that T1 cannot render. T5 covers the full ASCII range, so English
-% text sets exactly as it would under T1.
-% ---------------------------------------------------------------------
-\usepackage[utf8]{inputenc}
-\usepackage[T5]{fontenc}
+% Unicode fonts supplied with TeX Live / Overleaf. Compile with XeLaTeX.
+\usepackage{iftex}
+\ifXeTeX\else
+  \PackageError{soict2026}{Select XeLaTeX as the compiler}{In Overleaf settings,
+  select XeLaTeX, then Recompile from scratch.}
+\fi
+\usepackage[no-math]{fontspec}
+\setmainfont{Latin Modern Roman}
+\setsansfont{Latin Modern Sans}
+\setmonofont{Latin Modern Mono}
 %
 \usepackage{graphicx}
 \usepackage{amsmath}
@@ -24,21 +28,10 @@
 % recommends for diagrams and schematics.
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, calc, fit, backgrounds}
-% Colour carries meaning in Fig. 1 and is used for nothing else: green for the
-% frozen backbone, blue for a trained classifier, orange for the LoRA pool,
-% purple for the random projection, and red for the two blocks this paper adds.
-\definecolor{cfroz}{RGB}{198,224,180}
-\definecolor{cmlp} {RGB}{189,215,238}
-\definecolor{cpool}{RGB}{248,203,173}
-\definecolor{crp}  {RGB}{214,196,232}
-\definecolor{cours}{RGB}{192,0,0}
-\definecolor{cpanel}{RGB}{240,246,252}
-% A padlock, drawn rather than taken from a symbol font, so it needs no package
-% and scales with the surrounding text. It marks the blocks that stay frozen.
-\newcommand{\lk}{\tikz[baseline=-0.45ex]{
-  \draw[line width=0.3pt, black!75] (0,0.85mm) arc (180:0:0.5mm);
-  \fill[black!75, rounded corners=0.2mm]
-       (-0.85mm,-0.85mm) rectangle (0.85mm,0.85mm);}}
+% The figure uses functional colour groups and native vector geometry.
+% The photograph lives in figure_assets/ in the repository; Overleaf expects it
+% beside the source, so the path is searched in both places.
+\graphicspath{{./}{figure_assets/}}
 %
 \begin{document}
 %
@@ -60,26 +53,28 @@ Vietnam National University, Hanoi, Vietnam\\
 \email{24022480@vnu.edu.vn, 24022450@vnu.edu.vn}}
 %
 \maketitle
+% SOICT 2026 submission: keep author identities, suppress page numbers.
+\pagestyle{empty}
+\thispagestyle{empty}
 %
 \begin{abstract}
-Continual learning methods built on parameter-efficient tuning maintain a
-lightweight parameter pool, one set per task, and at inference must decide which
-set to attach to the backbone before classifying. That decision is made from a
-single source of evidence, so everything downstream is capped by the quality of
-one module. We show that a second source is already present inside the trained
-model and can be read out without gradient training: a second-order head built
-on a frozen random projection of the existing LoRA features, its weights the
-closed-form ridge solution of statistics accumulated one task at a time. It is
-fused at two points, both at inference. The first stage blends it with the
-routing signal after standardising the two onto a common scale; the second uses
-it as a secondary classifier, weighted per sample in inverse proportion to how
-decided the primary classifier already is, so the blend opens only on contested
-samples. Across three benchmarks and four seeds, routing accuracy rises by
-$+1.10$ to $+2.26$ points and classification accuracy by $+0.69$ to $+1.50$,
-each several times the seed-to-seed standard deviation, while the retention
-metrics show no change we can resolve. An ablation over four seeds separates the
-stages: the second carries most of the gain, and the first adds a further
-$+0.69$ and $+0.33$ on two benchmarks and nothing measurable on the third.
+Parameter-efficient continual learners maintain task-specific adapters whose
+selection affects both routing and classification. We augment HRM-PET with a
+random-projection (RP) head fitted by ridge regression over fixed first-task
+LoRA features. Its sufficient statistics are accumulated
+task by task without retaining examples. The same RP scores support two
+inference-time operations: task-level fusion with the initial adapted prediction
+before re-matching, and class-level fusion with the final logits using a
+top-two-margin gate. Across three benchmarks and four seeds, DRM-proposal
+accuracy increases by $1.10$--$2.26$ points and classification accuracy by
+$0.69$--$1.50$, with no consistent improvement in forgetting or backward
+transfer. Single-seed ablations across five backbones show that the routing
+contribution depends on the gate. A four-seed comparison against ungated
+class-only fusion favours the full method on ImageNet-R and CIFAR-100, but
+does not resolve a difference on CUB-200; this comparison measures the joint
+addition of routing and gating. A grid over the two mixing weights shows that
+classification accuracy is nearly flat in the routing weight, so the reported
+value is not a resolved optimum.
 
 \keywords{Continual learning \and Parameter-efficient tuning \and Parameter
 routing \and Random projection \and Signal fusion.}
@@ -89,58 +84,194 @@ routing \and Random projection \and Signal fusion.}
 %
 \section{Introduction}
 
-A continual learner built on parameter-efficient tuning keeps one lightweight
-parameter set per task and, at inference, must decide which set to attach to the
-frozen backbone before it can classify. That decision is made once, from a
-single module, and everything downstream inherits it: a wrong choice attaches
-the wrong adapter, and the classifier that follows is asked to work from
-features it was not adapted for. Successive methods in this line have improved
-the decision --- richer pools, attention-weighted combinations, explicit
-re-matching stages --- but none change the fact that one signal stands in front
-of the rest of the pipeline.
+Continual learning asks a model to absorb a stream of tasks without losing what
+earlier ones taught it. The dominant recent answer freezes a large pre-trained
+backbone and attaches a small set of task-specific parameters --- prompts,
+adapters, low-rank updates --- so that a new task writes into fresh capacity
+instead of overwriting old weights. Forgetting stays low by construction and no
+exemplars need be stored, which is why parameter-efficient tuning now leads the
+exemplar-free setting~\cite{ref_l2p,ref_dualprompt,ref_hide}.
 
-We observe that a second, independent source of evidence is already present
-inside such a trained model and is simply discarded. The LoRA features that the
-pipeline computes anyway can be pushed through a fixed random projection and
-read by a closed-form ridge classifier built from second-order statistics. Its
-output weights are fitted --- solving a supervised least-squares problem is
-learning, whatever the solver --- but they are obtained in closed form rather
-than by gradient descent, from running sums rather than from stored examples,
-and without touching the backbone, the adapters or the training loop. The head
-retains no images and no per-sample features, and adds one adapter forward per
-sample at inference. More importantly it fails on \emph{different samples}
-than the routing module does, which is the property that makes combining them
-worthwhile rather than redundant.
+The design moves the difficulty rather than removing it. At inference the task
+identity is unknown, so before the model can classify it must choose which
+parameter set to attach. That choice is itself a prediction, and every later
+computation inherits it: attach the wrong adapter and the classifier is asked to
+work from features it was never adapted for. Successive methods have improved
+the choice --- larger pools, attention-weighted mixtures, explicit re-matching
+stages that revisit an initial guess --- but the choice still rests on evidence
+drawn from one place, the backbone's own predictions.
 
-The paper puts that second source to work at the two points where the original
-pipeline commits to a decision. At the routing level it is blended with the
-existing task signal after both are standardised onto a common scale. At the
-classification level it is used as what it already is --- a complete classifier
---- weighted per sample so that the blend opens only where the primary
-classifier is undecided.
+We ask what a second, differently derived source of evidence would be worth, and
+find that one is already available for the price of a forward pass. The features
+such a learner computes anyway can be pushed through a frozen random projection
+and read by a ridge classifier fitted in closed form from accumulated
+second-order statistics, in the manner of RanPAC~\cite{ref_ranpac}. This head
+stores no examples and changes no training procedure, and --- the property that
+matters here --- it makes different mistakes from the routing module.
+
+We reuse that one head at the two points where the pipeline commits: to revise
+the task proposal before re-matching, and to blend with the final class logits
+under a per-sample gate that opens only where the primary classifier is
+undecided. Taking HRM-PET~\cite{ref_hrmpet} as the pipeline to build on, we
+measure what each operation contributes, and say so where the evidence does not
+settle the question.
 
 \subsubsection{Contributions.}
 \begin{itemize}
-\item We identify two weaknesses in the re-matching pipeline of
-      HRM-PET~\cite{ref_hrmpet}: its routing signal comes from one module, and a
-      better route does not automatically become a better prediction because the
+\item We examine unused complementary evidence in
+      HRM-PET~\cite{ref_hrmpet} and show that a better task proposal does not
+      automatically become a better class prediction because the
       shared head frequently predicts the correct class in spite of a wrong
       route (Sect.~\ref{sec:method}).
 \item We show that a second-order head over a frozen random projection of the
       existing features, fitted in closed form and never by gradient descent,
-      supplies a second source of evidence whose errors are decorrelated from
-      the first, and we fuse the two at the routing and the classification
-      level alike, entirely at inference time.
+      supplies a complementary source of evidence with partially different
+      errors from the first, and we fuse the two at the routing and the
+      classification level alike, entirely at inference time.
 \item We evaluate on three datasets over four seeds and report by axis: routing
       improves by $+1.10$ to $+2.26$ points and classification by $+0.69$ to
       $+1.50$, each several times the seed-to-seed standard deviation, while the
-      two retention metrics show no change we can resolve and we claim none
-      (Sect.~\ref{sec:results}).
+      two retention metrics show no consistent improvement
+      (Sect.~\ref{sec:exp}).
 \item We reconstruct the full grid the original work covers --- four datasets by
       five pre-training configurations, identified from traces in its released
       code. All $20$ cells improve on both accuracy axes, over baselines that
       span from $31.8$ to $93.8$ Acc@1 (Sect.~\ref{sec:grid}).
 \end{itemize}
+
+\section{Related Work}
+\label{sec:related}
+
+\subsubsection{Parameter pools and the selection they require.}
+L2P~\cite{ref_l2p} and DualPrompt~\cite{ref_dualprompt} set the shape most
+parameter-efficient continual learners still follow: freeze the backbone, keep a
+pool of lightweight parameter sets, and pick from it at inference using a query
+from the bare backbone. CODA-Prompt~\cite{ref_coda} replaces the discrete pick
+with an attention-weighted combination; HiDe-Prompt~\cite{ref_hide} separates
+within-task prediction, task-identity inference and task-adaptive prediction and
+optimises them apart, observing that identity inference, not within-task
+classification, is what limits the pipeline. HRM-PET~\cite{ref_hrmpet}, our
+baseline, substitutes LoRA adapters~\cite{ref_lora} for prompts and adds
+re-matching stages that revisit the initial decision. Later work enlarges the
+expert family: MoTE~\cite{ref_mote} combines task-specific experts, and
+DLEPEM~\cite{ref_dlepem} combines general and adapted prototypes for matching.
+Our contribution is specifically the reuse of a ridge head at both re-matching
+and class prediction, rather than a claim that prior work never combines evidence.
+
+\subsubsection{Closed-form solutions in continual learning.}
+A separate line replaces gradient descent on the classifier with a solution
+written in closed form, which removes the mechanism by which sequential updates
+overwrite one another. Nearest-class-mean prototypes are the simplest instance,
+and ADaM~\cite{ref_adam} adapts the backbone on the first task only, then reads
+frozen features. Analytic continual learning states the problem as least squares
+directly: ACIL~\cite{ref_acil} recasts class-incremental learning as a recursive
+least-squares problem in which a correlation matrix rather than a sample buffer
+carries the past, yielding a model equal to the one a joint fit would produce,
+and DS-AL~\cite{ref_dsal} adds a second stream to recover nonlinear capacity
+that a single linear solve gives up. RanPAC~\cite{ref_ranpac} reaches the same
+form from the feature side: frozen features through a fixed random projection,
+second-order statistics accumulated across tasks, one ridge system solved. On
+Split-ImageNet-R it reports a nonlinear projection head that outperforms its
+joint linear probe~\cite{ref_ranpac}.
+
+Our head belongs to this family and we claim no novelty in it --- the
+projection, the Gram accumulation and the ridge solve are RanPAC's. What differs
+is its role. These methods use the closed-form classifier as the entire
+predictor and discard routing; we keep the routing pipeline and consult the same
+solved head twice, once on the task decision and once on the class decision.
+
+\subsubsection{Correcting the classifier after the fact.}
+Class-incremental classifiers lean towards recent classes, and the survey of
+Masana et al.~\cite{ref_survey} locates the bias in both the bias terms and the
+classifier weight norms. Corrections follow the diagnosis:
+iCaRL~\cite{ref_icarl} classifies to the nearest exemplar mean;
+BiC~\cite{ref_bic} learns a per-task affine map on the logits from a held-out
+split; Weight Aligning~\cite{ref_wa} rescales new-class weight norms to match
+the old; LUCIR~\cite{ref_lucir} normalises features and weights before the
+softmax. We keep the adapters, auxiliary classifier and shared head fixed,
+and retain no exemplars. Current-task training data are still needed to fit
+the RP head. The fusion of Sect.~\ref{sec:method} acts on scores at inference;
+its extra fixed-adapter pass is included in the reported cost.
+
+\subsection{HRM-PET: The Baseline We Build On}
+
+We use the released HRM-PET~\cite{ref_hrmpet} inference path. The diagnostics
+quoted in this subsection are measurements at seed $42$; they motivate the
+design and are separate from the evaluation of Sect.~\ref{sec:exp}.
+
+\subsubsection{Task-identity inference (TII).}
+The input image is passed through the \emph{bare} backbone, with no adapter
+attached, to obtain a query feature. That feature enters an auxiliary classifier
+$g_\omega$ trained with cross-entropy, producing unnormalised class logits:
+\begin{equation}
+q(x) = h(x;\theta_{\mathrm{ptm}}),
+\qquad
+u = g\!\left(q(x); \theta_\omega\right).
+\label{eq:tii}
+\end{equation}
+The initial match is $t_0=\mathcal T(\arg\max_c u_c)$.
+
+\subsubsection{Re-matching (DRM and CRM).}
+The first adapted pass attaches $p_{t_0}$ and produces
+$r=g_{\theta_g}(h(x;p_{t_0},\theta_{\rm ptm}))$. DRM proposes the task of
+$\arg\max r$ and evaluates its adapter when it differs from $t_0$.
+The proposed fusion modifies this task proposal, not the preceding bare TII
+pass. CRM processes low-confidence samples selected from $r$ using the
+baseline's generalised-entropy threshold. It compares the current logits with
+an alternative adapter associated with the second-ranked class of $r$, using
+the baseline log-sum-exp score. Thus CRM is confidence-triggered; it is not
+restricted to cases where the two task identities agree. Both operations reuse
+trained modules and can require further adapter forwards. Re-matching is a
+heuristic, not a guarantee that classification accuracy cannot decrease.
+
+\subsubsection{Shared classification head.}
+The selected parameter set is attached to the backbone, and the shared head
+produces a score vector over all classes seen so far:
+\begin{equation}
+\ell = g\!\left(h(x; p_{\hat{t}}, \theta_{\mathrm{ptm}}); \theta_g\right)
+   \in \mathbb{R}^{|\mathcal{Y}|},
+\qquad
+\hat{y} = \arg\max_c\, \ell_c ,
+\label{eq:logits}
+\end{equation}
+where $\hat{t}$ is the identity after DRM and CRM. Classes not yet seen are
+masked with $-\infty$.
+
+\subsubsection{First weakness: unused complementary evidence.}
+The baseline derives its routing evidence from TII and subsequent shared-head
+predictions, without an independently fitted RP head. To see what a second
+source would be worth we built the head of Sect.~\ref{sec:rp} on HRM-PET's own
+LoRA features and used it as a router. At seed 42 on ImageNet-R, TII routes
+$63.80\%$ of samples correctly, HRM-PET's DRM-proposal metric is $77.79\%$ and
+the RP head alone $77.12\%$, while the \emph{union} of the two --- the fraction
+at least one routes correctly --- reaches $82.99\%$, against $92.86\%$ on
+CIFAR-100 and $96.26\%$ on CUB-200.
+
+They therefore fail on \emph{different} samples: the union exceeds TII by
+$19.19$ points of the ImageNet-R test set, and since TII is wrong on $36.20\%$
+of it, those points are $53.0\%$ of TII's errors repaired by the head, against
+$62.0\%$ and $46.9\%$ on the other two. Had they failed together the union
+could not exceed the stronger of them. The union is an oracle: it uses the
+labels to ask what a perfect combiner could reach, and no router we build
+attains it. This diagnostic compares bare TII with RP, not $r$ with $s$, the
+actual Stage 1 inputs.
+
+\subsubsection{Second weakness: better routing is not better classification.}
+$\ell$ in (\ref{eq:logits}) comes from the \emph{shared} head, which spans every
+class seen so far, so a mis-routed sample is frequently classified correctly
+anyway: correcting its route buys nothing, and re-routing a sample that was
+already correct can break it. Aggregate accuracy differences therefore do not
+measure the fraction of routing repairs that also repair a class prediction.
+
+The RP head is also a complete classifier, and a routing-only variant discards
+that evidence. On ImageNet-R the routed head classifies $74.31\%$ correctly and
+the projection head $70.08\%$, yet their union reaches $78.89\%$: even four
+points weaker overall, the head alone contributes $4.58$ percentage points of
+the test set to this union, and $2.43$ and $3.87$ on CIFAR-100 and CUB-200.
+These two measurements give the two components below.
+
+\section{Method}
+\label{sec:method}
 
 \subsection{Problem Statement}
 
@@ -168,267 +299,242 @@ is unknown at inference, the system is forced to \emph{choose} which parameter
 set to attach to the backbone before classifying, and everything downstream
 depends on that choice.
 
-Three score vectors recur below, each over the classes seen so far: $u$ from
-TII's auxiliary classifier $g_\omega$, $\ell$ from the shared head $g_{\theta_g}$
-once an adapter is attached, and $s$ from the projection head of
-Sect.~\ref{sec:method}. We write $\mathcal{T}(\cdot)$ for the map from a class to
-its task, $\hat{t}_f$ and $\hat{t}_s$ for the task identity before and after
-re-matching, and $z(\cdot)$ for per-sample standardisation, using the population
-standard deviation floored at $10^{-6}$.
+We distinguish four class-score vectors: bare TII scores $u$, initial adapted
+shared-head logits $r$, final re-matched logits $\ell$, and RP scores $s$.
+The class-to-task map is $\mathcal T(\cdot)$; $t_0$ is the initial TII match and
+$\hat t_{\rm DRM}$ the task proposed for direct re-matching. We write
+$z(\cdot)$ for per-sample standardisation with the population standard
+deviation floored at $10^{-6}$.
 
-\subsection{The HRM-PET Baseline Pipeline}
-
-We take HRM-PET~\cite{ref_hrmpet} as our baseline. Its inference pipeline
-consists of four modules in sequence, presented in the order the data passes
-through them.
-
-\subsubsection{Task-identity inference (TII).}
-The input image is passed through the \emph{bare} backbone, with no adapter
-attached, to obtain a query feature. That feature enters an auxiliary classifier
-$g_\omega$ trained with cross-entropy, producing a distribution over classes:
-\begin{equation}
-q(x) = h(x;\theta_{\mathrm{ptm}}),
-\qquad
-\hat{d}(x) = g\!\left(q(x); \theta_\omega\right).
-\label{eq:tii}
-\end{equation}
-The initial task identity is the task containing the highest-probability class,
-with $\mathcal{T}$ the class-to-task map.
-
-\subsubsection{Direct and confidence-based re-matching (DRM, CRM).}
-Two modules then try to repair a wrong initial match, neither of them trained.
-DRM attaches $p_{\hat{t}_f}$, reads the shared head's prediction, and takes the
-task of that prediction, $\hat{t}_s$, whenever it disagrees with $\hat{t}_f$;
-knowledge shared across the pool means the predicted class often already belongs
-to the right task even when the initial match was wrong. Because the substitute
-is used only on disagreement, the worst case is a wrong prediction $\hat{t}_f$
-would have produced anyway, so the step cannot degrade accuracy.
-
-When the two agree DRM has nothing to substitute, and CRM takes over. Each
-parameter set was trained only alongside the classes of its own task, so a
-mismatched sample yields a less decided predictive distribution. CRM scores the
-$N=2$ highest-probability classes of $\hat{d}(x)$ by a generalised posterior
-entropy of the head's output under each candidate's adapter --- no extra
-training needed --- and keeps the most confident. Each candidate costs one
-further forward pass, which is why $N$ is kept small.
-
-\subsubsection{Shared classification head.}
-The selected parameter set is attached to the backbone, and the shared head
-produces a score vector over all classes seen so far:
-\begin{equation}
-\ell = g\!\left(h(x; p_{\hat{t}}, \theta_{\mathrm{ptm}}); \theta_g\right)
-   \in \mathbb{R}^{|\mathcal{Y}|},
-\qquad
-\hat{y} = \arg\max_c\, \ell_c ,
-\label{eq:logits}
-\end{equation}
-where $\hat{t}$ is the identity after DRM and CRM. Classes not yet seen are
-masked with $-\infty$.
-
-\subsubsection{First weakness: one routing signal.}
-The whole four-module chain depends on \emph{one} routing signal, produced at
-(\ref{eq:tii}); DRM and CRM refine it and add no further source. To see what a
-second source would be worth we built the random-projection head of
-Sect.~\ref{sec:method} on HRM-PET's own LoRA features and used it as a router.
-At seed 42 on ImageNet-R, TII routes $63.80\%$ of samples correctly, HRM-PET
-after DRM and CRM $77.79\%$, and the head on its own $77.12\%$ --- but the
-\emph{union} of TII and the head, the fraction at least one of them routes
-correctly, reaches $82.99\%$; the corresponding unions are $92.86\%$ on
-CIFAR-100 and $96.26\%$ on CUB-200.
-
-The two routers therefore fail on \emph{different} samples. The union exceeds
-TII by $19.19$ points of the whole ImageNet-R test set, and since TII is wrong
-on $36.20\%$ of it, those points are $53.0\%$ of TII's errors repaired by the
-head; the same figures are $62.0\%$ on CIFAR-100 and $46.9\%$ on CUB-200. That
-complementarity is the necessary condition for fusion to mean anything --- had
-the two failed together, their union could not exceed the stronger of them, and
-it exceeds both by more than five points. The union is an oracle: it uses the
-labels to ask what a perfect combiner could reach, and no router we build
-attains it.
-
-\subsubsection{Second weakness: better routing is not better classification.}
-$\ell$ in (\ref{eq:logits}) comes from the \emph{shared} head, which spans every
-class seen so far, so a mis-routed sample is frequently classified correctly
-anyway. Correcting its route then buys nothing, and re-routing a sample that was
-already correct can break it. Empirically the routing gain converts into
-classification accuracy at only $14$--$21\%$, and on CUB-200 not at all.
-
-The RP head, however, is not merely a router: it is a complete classifier the
-routing stage discards, and the same complementarity holds at that level. On
-ImageNet-R the routed head classifies $74.31\%$ correctly and the projection
-head $70.08\%$, yet their union reaches $78.89\%$: even four points weaker
-overall, the head is right on $4.58\%$ of the samples the primary head cannot
-handle, and on $2.43\%$ and $3.87\%$ for CIFAR-100 and CUB-200. These two
-measurements lead directly to the two components of Sect.~\ref{sec:method}: the
-first fuses at the routing level, the second uses the same head as a second
-classifier.
-
-\section{Related Work}
-\label{sec:related}
-
-\subsubsection{Parameter pools and the selection they require.}
-L2P~\cite{ref_l2p} and DualPrompt~\cite{ref_dualprompt} set the shape most
-parameter-efficient continual learners still follow: freeze the backbone, keep a
-pool of lightweight parameter sets, and pick from it at inference using a query
-from the bare backbone. CODA-Prompt~\cite{ref_coda} replaces the discrete pick
-with an attention-weighted combination; HiDe-Prompt~\cite{ref_hide} separates
-within-task prediction, task-identity inference and task-adaptive prediction and
-optimises them apart, observing that identity inference, not within-task
-classification, is what limits the pipeline. HRM-PET~\cite{ref_hrmpet}, our
-baseline, substitutes LoRA adapters~\cite{ref_lora} for prompts and adds
-re-matching stages that revisit the initial decision. Later work enlarges the
-pool rather than changing its structure: MoTE~\cite{ref_mote} keeps one expert
-per task, and dynamic LoRA-expert selection~\cite{ref_dlepem} matches with
-prototypes. All share the property this paper targets: one selection decision
-stands in front of the classifier, and everything downstream inherits its errors.
-
-\subsubsection{Classifiers fitted without gradient descent.}
-A separate line drops routing and reads the frozen features directly.
-Nearest-class-mean prototypes are the simplest instance; ADaM and its
-successors~\cite{ref_adam} adapt the backbone on the first task only;
-RanPAC~\cite{ref_ranpac} projects frozen features through a fixed random matrix,
-accumulates second-order statistics and solves a ridge system in closed form. On
-Split-ImageNet-R with a ViT-B/16 backbone RanPAC reports $77.9\%$ where a linear
-probe trained jointly on all $200$ classes --- a model that by construction
-cannot forget --- reaches $72.0\%$~\cite{ref_ranpac}. Such a head is therefore
-not a weak fallback, and its gap to a routed pipeline is not explained by
-forgetting; what it gives up is the structure routing provides. We take the head
-of~\cite{ref_ranpac} into a routing pipeline as a second source of evidence, not
-as a replacement for the first.
-
-\subsubsection{Correcting the classifier after the fact.}
-Class-incremental classifiers lean towards recent classes, and the survey of
-Masana et al.~\cite{ref_survey} locates the bias in both the bias terms and the
-classifier weight norms. Corrections follow the diagnosis:
-iCaRL~\cite{ref_icarl} classifies to the nearest exemplar mean;
-BiC~\cite{ref_bic} learns a per-task affine map on the logits from a held-out
-split; Weight Aligning~\cite{ref_wa} rescales new-class weight norms to match
-the old; LUCIR~\cite{ref_lucir} normalises features and weights before the
-softmax. Our setting rules most of this out rather than improving on it: no
-exemplars, no validation split, and no access to training --- adapters,
-auxiliary classifier and shared head all arrive frozen. The fusion of
-Sect.~\ref{sec:method} acts on scores alone, at inference, from quantities
-already present in the forward pass.
-
-\section{Method}
-\label{sec:method}
-
-We add a second source of evidence and two places at which to fuse it in, one
-for each weakness above. Both sit at inference time: no parameter is trained and
-no model is retrained. Figure~\ref{fig:pipeline} shows where they go.
-
-% [!ht] rather than the sample's bare \begin{figure}: the reference to this
-% figure is the last sentence of the section opening, so the figure has to sit
-% directly under it. The default tbp lets it drift pages away from its mention.
-\begin{figure}[!ht]
+\begin{figure}[t]
 \centering
-% No \resizebox: the picture is laid out to fit \textwidth at its natural size,
-% so the labels keep the body font. The previous version was wider than the
-% column and was scaled down, which is why its text came out below \tiny.
-\begin{tikzpicture}[
-  font=\scriptsize,
-  >={Stealth[length=1.5mm]},
-  blk/.style={draw=black!55, rounded corners=1.5pt, minimum height=6.5mm,
-              inner xsep=2.5pt, align=center, font=\scriptsize},
-  froz/.style={blk, fill=cfroz},
-  mlp/.style={blk, fill=cmlp},
-  pool/.style={blk, fill=cpool},
-  rph/.style={blk, fill=crp},
-  io/.style={blk, fill=black!5, draw=black!70},
-  ours/.style={blk, draw=cours, line width=0.9pt, fill=cours!7,
-               minimum height=8mm},
-  lab/.style={font=\scriptsize\itshape, text=black!55, inner sep=1pt},
-  tag/.style={font=\tiny, text=black!70, inner sep=1.2pt, fill=white}
+% Original scientific artwork; photos are documented in FIGURE_SOURCES.txt.
+\definecolor{ib}{RGB}{43,99,151}%
+\definecolor{it}{RGB}{23,126,110}%
+\definecolor{ip}{RGB}{111,79,156}%
+\definecolor{io}{RGB}{194,105,32}%
+\definecolor{ir}{RGB}{172,63,99}%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  font=\fontsize{8}{9}\selectfont,
+  arr/.style={-{Stealth[length=1.5mm]},line width=.6pt,draw=ib},
+  tinylabel/.style={font=\fontsize{7}{8}\selectfont,align=center},
+  heading/.style={anchor=west,font=\fontsize{8}{9}\selectfont\bfseries},
+  dot/.style={circle,inner sep=0pt,minimum size=1.4mm},
+  pics/vit/.style args={#1/#2}{
+    code={
+      \foreach \k in {3,2,1,0}{
+        \draw[draw=#1!80,fill=#1!10,line width=.45pt]
+          ({-.43+.09*\k},{-.36+.07*\k}) rectangle
+          ({.24+.09*\k},{.36+.07*\k});
+      }
+      \foreach \y in {-.22,.23}{
+        \draw[#1!65,line width=.3pt] (-.34,\y) -- (.14,\y);
+      }
+      \node[tinylabel] at (-.05,-.03) {ViT};
+      \node[tinylabel,text=#1] at (.02,-.64) {#2};
+    }},
+  pics/matrix/.style args={#1/#2}{
+    code={
+      \foreach \i in {0,...,4}\foreach \j in {0,...,4}{
+        \pgfmathtruncatemacro{\shade}{15+mod(13*\i+29*\j,65)}
+        \fill[#1!\shade] ({-.35+.14*\i},{-.35+.14*\j})
+             rectangle ++(.13,.13);
+      }
+      \draw[#1,line width=.4pt] (-.36,-.36) rectangle (.35,.35);
+      \node[tinylabel,text=#1] at (0,-.58) {#2};
+    }},
+  pics/net/.style={
+    code={
+      \foreach \a in {-.3,0,.3}\foreach \b in {-.45,-.225,0,.225,.45}{
+        \draw[it!30,line width=.22pt] (-.42,\a) -- (.42,\b);
+      }
+      \foreach \a in {-.3,0,.3}
+        \node[dot,draw=it,fill=it!20] at (-.42,\a) {};
+      \foreach \b in {-.45,-.225,0,.225,.45}
+        \node[dot,draw=it,fill=it!65] at (.42,\b) {};
+    }}
 ]
+\path[use as bounding box] (0,0) rectangle (12.1,9.3);
+\node[heading,text=ib] at (0,9.12) {(a) One image, two complementary predictions};
+% A real image is repeated to make reuse of x explicit.
+\node[inner sep=0pt] (input) at (.64,7.69)
+  {\includegraphics[width=1.05cm]{mallard.jpg}};
+\node[tinylabel] at (.64,7.10) {Input $x$};
+\pic at (2.30,7.65) {vit={ib/Bare + TII}};
+\draw[arr] (1.21,7.69) -- (1.83,7.69);
+\draw[arr] (2.85,7.69) -- node[tinylabel,above] {$u\to t_0$} (3.80,7.69);
+\node[inner sep=0pt] at (3.95,7.75)
+  {\includegraphics[width=.37cm]{mallard.jpg}};
+\pic at (4.65,7.65) {vit={ib/Initial pass + $g$}};
+% Adapter pool shown as individual selectable modules, not a text box.
+\node[tinylabel] at (4.66,8.88) {LoRA pool};
+\foreach \pos/\lab/\shade in {4.05/A/42,4.65/B/13,5.25/C/13}{
+  \draw[ib,fill=ib!\shade,line width=.5pt]
+    (\pos-.23,8.38) rectangle (\pos+.23,8.70);
+  \node[tinylabel] at (\pos,8.54) {$p_{\lab}$};
+}
+\draw[io,line width=.9pt] (3.79,8.35) rectangle (4.31,8.73);
+\draw[arr,draw=io] (4.05,8.34) -- (4.05,8.22) -- (4.6,8.22) -- (4.6,8.13);
+\node[circle,draw=io,fill=io!15,line width=.8pt,minimum size=.64cm,inner sep=1pt,text=io] (route) at (6.48,7.69) {$F_R$};
+\draw[arr] (5.20,7.69) -- node[above] {$r$} (route);
+\node[tinylabel,text=io] at (6.48,8.42) {Stage 1\\task fusion};
+\draw[arr,draw=io] (route) -- node[tinylabel,above] {$\hat t_{\rm DRM}$} (7.83,7.69);
+\node[inner sep=0pt] at (7.97,7.75)
+  {\includegraphics[width=.37cm]{mallard.jpg}};
+\pic at (8.67,7.65) {vit={ib/DRM / CRM + $g$}};
+\draw[io,fill=io!18,line width=.7pt] (8.34,8.37) rectangle (9.03,8.70);
+\node[tinylabel,text=io] at (8.69,8.54) {$p_{\hat t}$};
+\draw[arr,draw=io] (8.67,8.35) -- (8.67,8.13);
+\node[circle,draw=ir,fill=ir!14,line width=.8pt,minimum size=.64cm,inner sep=1pt,text=ir] (class) at (10.45,7.69) {$F_C$};
+\draw[arr] (9.22,7.69) -- node[above] {$\ell$} (class);
+\node[tinylabel,text=ir] at (10.45,8.42) {Stage 2\\class fusion};
+\node[inner sep=0pt] at (11.67,7.69)
+  {\includegraphics[width=.73cm]{mallard.jpg}};
+\draw[arr,draw=ir] (class) -- (11.23,7.69);
+\node[tinylabel,text=ir] at (11.67,7.10) {$\hat y$: duck};
+% Fixed branch: encoder, feature strips, expansion connections, ridge matrix.
+\draw[arr,draw=it] (.11,7.34) -- (.11,6.08) -- (1.83,6.08);
+\pic at (2.30,6.04) {vit={it/Fixed $p_1$}};
+\draw[arr,draw=it] (2.85,6.08) -- (3.25,6.08);
+\foreach \k/\tone in {0/20,1/65,2/40,3/85}{
+  \fill[it!\tone] (3.34,{5.71+.18*\k}) rectangle ++(.21,.17);
+}
+\node[tinylabel,text=it] at (3.45,5.40) {$f$\\768};
+\draw[arr,draw=it] (3.64,6.08) -- (4.03,6.08);
+\pic at (4.59,6.08) {net};
+\node[tinylabel,text=it] at (4.59,5.40) {$W^\top$\\ReLU};
+\draw[arr,draw=it] (5.14,6.08) -- (5.66,6.08);
+\foreach \k in {0,...,7}{
+  \pgfmathtruncatemacro{\tone}{12+mod(31*\k,75)}
+  \fill[it!\tone] (5.78,{5.65+.115*\k}) rectangle ++(.23,.105);
+}
+\node[tinylabel,text=it] at (5.97,5.40) {$h$\\$10^4$};
+\draw[arr,draw=ip] (6.10,6.08) -- (6.96,6.08);
+\pic at (7.45,6.08) {matrix={ip/$W_{\rm out}$}};
+\draw[arr,draw=ip] (7.92,6.08) -- (8.39,6.08);
+\foreach \pos/\height in {8.48/.57,8.70/.23,8.92/.13,9.14/.10}{
+  \fill[ip!75] (\pos,5.82) rectangle ++(.15,\height);
+}
+\draw[ip!70,line width=.3pt] (8.43,5.80) -- (9.34,5.80);
+\node[tinylabel,text=ip] at (8.88,5.40) {Class scores $s$};
+\draw[arr,draw=ip] (9.38,6.08) -- (10.45,6.08) -- (class.south);
+\draw[arr,draw=ip] (9.66,6.08) -- (9.66,6.76) -- (6.48,6.76) -- (route.south);
+\fill[ip] (9.66,6.08) circle (.04);
+\node[tinylabel,text=ip,fill=white,inner sep=1pt] at (7.73,6.76) {task-wise max of the same $s$};
+% Fitting is shown with samples, feature strips and accumulated matrix cells.
+\draw[black!25,line width=.35pt] (0,5.13) -- (12.1,5.13);
+\node[heading,text=it] at (0,4.91) {(b) After each task: keep statistics, not a photo memory};
+\foreach \dx/\dy in {.10/.10,.05/.05,0/0}{
+  \node[inner sep=1pt,draw=it!65,fill=white] at ({.67+\dx},{4.12+\dy})
+    {\includegraphics[width=.78cm]{mallard.jpg}};
+}
+\node[tinylabel] at (.73,3.62) {Task $t$};
+\draw[arr,draw=it] (1.20,4.15) -- (1.79,4.15);
+\pic[scale=.70] at (2.22,4.15) {net};
+\node[tinylabel,text=it] at (2.22,3.62) {Fixed $\phi$};
+\draw[arr,draw=it] (2.65,4.15) -- node[tinylabel,above] {$h,y$} (3.66,4.15);
+\pic at (4.15,4.15) {matrix={ip/$G$}};
+\node[tinylabel,text=ip] at (5.00,4.64) {Accumulate};
+\pic at (5.86,4.15) {matrix={ip/$C$}};
+\draw[arr,draw=ip] (6.41,4.15) -- (7.00,4.15);
+\node[align=center,text=ip] at (8.49,4.17)
+  {Ridge solve};
+\node[tinylabel] at (8.49,3.62) {No gradient update};
+\draw[arr,draw=ip] (10.00,4.15) -- (10.67,4.15);
+\pic at (11.18,4.15) {matrix={ip/Updated $W_{\rm out}$}};
+% The examples below are calculated from a documented, four-class toy input.
+\draw[black!25,line width=.35pt] (0,3.30) -- (12.1,3.30);
+\draw[black!20,line width=.35pt] (6.11,.18) -- (6.11,3.02);
+\node[heading,text=io] at (0,3.06) {(c) Task decision: A $\rightarrow$ B};
+\node[heading,text=ir] at (6.36,3.06) {(d) Class decision: goose $\rightarrow$ duck};
+\node[tinylabel] at (1.03,2.63) {Initial $z(r^{\rm task})$};
+\node[tinylabel] at (2.91,2.63) {RP $z(s^{\rm task})$};
+\node[tinylabel] at (4.91,2.63) {Fused, $w=0.7$};
+\draw[black!45,line width=.3pt] (0.42000000000000004,1.65) -- (1.6400000000000001,1.65);
+\fill[ib!70] (0.4900000000000001,1.65) rectangle (0.7300000000000001,1.9771);
+\draw[ib,line width=.75pt] (0.4700000000000001,1.63) rectangle (0.7500000000000001,1.9971);
+\node[tinylabel] at (0.6100000000000001,.79) {A};
+\fill[ib!70] (0.91,1.65) rectangle (1.15,1.9304);
+\node[tinylabel] at (1.03,.79) {B};
+\fill[ib!70] (1.33,1.65) rectangle (1.5700000000000003,1.0425);
+\node[tinylabel] at (1.4500000000000002,.79) {C};
+\draw[black!45,line width=.3pt] (2.3000000000000003,1.65) -- (3.52,1.65);
+\fill[ip!70] (2.37,1.65) rectangle (2.6100000000000003,1.3684);
+\node[tinylabel] at (2.49,.79) {A};
+\fill[ip!70] (2.79,1.65) rectangle (3.0300000000000002,2.2576);
+\draw[ip,line width=.75pt] (2.77,1.63) rectangle (3.0500000000000003,2.2776);
+\node[tinylabel] at (2.91,.79) {B};
+\fill[ip!70] (3.21,1.65) rectangle (3.45,1.3240);
+\node[tinylabel] at (3.33,.79) {C};
+\draw[black!45,line width=.3pt] (4.3,1.65) -- (5.5200000000000005,1.65);
+\fill[io!70] (4.37,1.65) rectangle (4.61,1.7945);
+\node[tinylabel] at (4.49,.79) {A};
+\fill[io!70] (4.79,1.65) rectangle (5.03,2.0285);
+\draw[io,line width=.75pt] (4.7700000000000005,1.63) rectangle (5.05,2.0485);
+\node[tinylabel] at (4.91,.79) {B};
+\fill[io!70] (5.21,1.65) rectangle (5.45,1.1269);
+\node[tinylabel] at (5.33,.79) {C};
 
-% ---------------- row 1 : the two sources ----------------
-\node[io] (in) at (0,0) {test\\image};
-\node[froz, anchor=west] (bb)   at (1.3,0.62) {\lk\,$h_{\mathrm{ptm}}$};
-\node[mlp,  anchor=west] (gw)   at ([xshift=3mm]bb.east) {\lk\,$g_\omega$};
-\node[pool, anchor=west] (lo1)  at (1.3,-0.62) {\lk\,LoRA $p_1$};
-\node[rph,  anchor=west] (proj) at ([xshift=3mm]lo1.east) {\lk\,$W$, ReLU};
-\node[rph,  anchor=west] (ridge)at ([xshift=3mm]proj.east) {ridge $W_{\mathrm{out}}$};
+\node[tinylabel,text=ib] at (1.03,.49) {A selected};
+\node[tinylabel,text=io] at (4.91,.49) {B selected};
+\node[tinylabel] at (3.06,.17) {A: cat \quad B: duck, goose \quad C: car};
+% Vertical plots share a probability scale; only the two competitors are shown.
+\node[tinylabel] at (7.43,2.63) {Before: softmax$(\ell)$};
+\node[tinylabel] at (10.72,2.63) {After: softmax$(\hat\ell)$};
+\draw[black!40,line width=.3pt] (6.63,.92) -- (8.23,.92);
+\fill[it!75] (6.779999999999999,.92) rectangle (7.18,1.7096);
+\node[tinylabel,above] at (6.9799999999999995,1.7096) {0.44};
+\node[tinylabel,below] at (6.9799999999999995,.89) {duck};
+\fill[io!75] (7.68,.92) rectangle (8.08,1.7926);
+\node[tinylabel,above] at (7.88,1.7926) {0.48};
+\node[tinylabel,below] at (7.88,.89) {goose};
+\draw[black!40,line width=.3pt] (9.92,.92) -- (11.520000000000001,.92);
+\fill[it!75] (10.070000000000002,.92) rectangle (10.47,2.1437);
+\node[tinylabel,above] at (10.270000000000001,2.1437) {0.68};
+\node[tinylabel,below] at (10.270000000000001,.89) {duck};
+\fill[io!75] (10.970000000000002,.92) rectangle (11.370000000000001,1.3364);
+\node[tinylabel,above] at (11.170000000000002,1.3364) {0.23};
+\node[tinylabel,below] at (11.170000000000002,.89) {goose};
 
-\begin{scope}[on background layer]
-\node[draw=black!40, dashed, rounded corners=2pt, fill=cpanel,
-      fit=(bb)(gw)(lo1)(proj)(ridge), inner sep=3mm] (panel) {};
-\end{scope}
-\node[lab, anchor=south west] at ([xshift=0.5mm]panel.north west)
-      {two sources of evidence, one forward pass each};
-
-\node[ours, anchor=west] (f1) at ([xshift=5mm]panel.east)
-      {\textcolor{cours}{\textbf{Stage 1}}\\routing fusion};
-
-\draw[->] (in.east) -- ++(0.15,0) |- (bb.west);
-\draw[->] (in.east) -- ++(0.15,0) |- (lo1.west);
-\draw[->] (bb) -- (gw);
-\draw[->] (lo1) -- (proj);
-\draw[->] (proj) -- (ridge);
-\draw[->] (gw.east)    -- ++(0.30,0) |- (f1.west);
-\draw[->] (ridge.east) -- ++(0.30,0) |- (f1.west);
-\node[tag] at ([xshift=2.1mm, yshift=1.3mm]gw.east) {$u$};
-\node[tag] at ([xshift=2.1mm, yshift=1.3mm]ridge.east) {$s$};
-
-% ---------------- row 2 : the routed pipeline ----------------
-\def\ry{-2.95}
-\node[pool, minimum width=1.85cm, minimum height=9.5mm] (pl) at (1.0,\ry) {};
-\foreach \i in {0,...,3}{
-  \node[draw=black!55, fill=cpool!55, minimum width=2.3mm, minimum height=3.2mm,
-        inner sep=0] at ([xshift=(\i-1.5)*3.1mm, yshift=1.9mm]pl.center) {};}
-\node[font=\tiny, anchor=center] at ([yshift=-2.4mm]pl.center) {param.\ pool $P$};
-
-\node[blk, anchor=west] (dr) at ([xshift=4.5mm]pl.east) {DRM\,/\,CRM};
-\node[mlp, anchor=west] (sh) at ([xshift=4.5mm]dr.east) {shared head $g_{\theta_g}$};
-\node[ours, anchor=west] (f2) at ([xshift=4.5mm]sh.east)
-      {\textcolor{cours}{\textbf{Stage 2}}\\gated fusion};
-\node[io, anchor=west] (out) at ([xshift=4.5mm]f2.east) {prediction};
-
-\draw[->] (pl) -- (dr);
-\draw[->] (dr) -- (sh);
-\draw[->] (sh) -- (f2);
-\draw[->] (f2) -- (out);
-\node[tag] at ($(sh.east)!0.5!(f2.west)$) {$\ell$};
-
-% ---------------- the two links between the rows ----------------
-% Both run in the empty lane below the panel, so they cross no block.
-\draw[->] (f1.south) -- ++(0,-1.28) -| (pl.north);
-\node[tag] at ([xshift=-1.1cm, yshift=-1.28cm]f1.south) {$\hat{t}_f$};
-\draw[->, dashed, cours!80] (ridge.south) -- ++(0,-1.2) -| (f2.north);
-\node[tag, text=cours!85] at ([xshift=2mm, yshift=-1.2cm]ridge.south) {$s$};
-
+\draw[arr,draw=ir,line width=.9pt] (8.60,1.56) -- (9.58,1.56);
+\node[tinylabel,text=ir] at (9.10,1.96) {+ RP};
+\node[tinylabel,text=ir] at (9.10,1.13) {$\beta_i=0.475$};
+\node[tinylabel] at (9.21,.38) {Two classes shown; fusion uses all four.};
+\node[tinylabel,text=black!65,anchor=east] at (12.1,.05) {Illustrative values, not experimental results};
 \end{tikzpicture}
-\caption{The inference pipeline. Red marks the two blocks this paper adds;
-everything else is HRM-PET. Padlocks mark what stays frozen: the backbone, the
-first task's adapter and the random projection are never updated, and the ridge
-head is refitted in closed form once per task. The head is computed once per
-sample and read twice --- its task-level scores $s$ join TII's $u$ at Stage 1,
-and the same vector, read over classes, joins the routed logits $\ell$ at
-Stage 2 (red dashed).}
+\caption{Illustrated two-stage fusion. (a) Repeated thumbnails denote the same
+input. Initial adapted logits $r$, not bare TII scores $u$, enter $F_R$;
+one fixed RP branch supplies $s$ to both fusion stages. (b) Task-wise fitting
+retains cumulative statistics, not images. (c--d) A four-class toy example
+shows a changed task proposal and class prediction; both use the same $s$.
+Bars in (c) are standardised task scores; (d) shows two class probabilities
+before and after gated fusion, computed over all four classes.
+These are illustrations, not experimental results or guaranteed repairs.
+Photo: T.~G.~Barnes/USFWS (public domain).}
 \label{fig:pipeline}
 \end{figure}
 
 \subsection{The Second Source of Evidence}
+\label{sec:rp}
 
-The second source must satisfy two constraints. Nothing in it may be updated by
-gradient descent across the sequence, since parameters trained that way can be
-overwritten by later tasks --- which does not forbid it from being fitted, only
-from being fitted in a way that forgets. And it must preserve the exemplar-free
-protocol. A second-order classification head in the style of
-RanPAC~\cite{ref_ranpac} satisfies both.
+We fit an RP head after each task and reuse its scores in two inference-time
+fusion operations. HRM-PET parameters are not retrained.
+Figure~\ref{fig:pipeline} distinguishes the initial adapted logits from the
+bare TII scores and shows both reuse paths.
 
-The input feature $f \in \mathbb{R}^{d}$ with $d = 768$ is taken from the final
-feature layer of ViT-B/16 after attaching \emph{one} fixed LoRA parameter set,
-which serves as first-session adaptation. The index of that parameter set must be
-fixed across all tasks; otherwise the accumulated terms below would mix
-incompatible feature spaces.
+The RP head follows RanPAC~\cite{ref_ranpac}. Features
+$f\in\mathbb R^d$, $d=768$, are column vectors and come from ViT-B/16 with the
+first task's LoRA adapter ($p_1$ here, adapter index $0$ in code), fixed during
+accumulation and inference. No feature normalisation is applied. Changing
+adapters between tasks would mix incompatible feature spaces.
 
 \subsubsection{Projection and second-order statistics.}
 The feature is projected into a high-dimensional space of size $M = 10^4$ and
 passed through a nonlinearity, and the projected features are accumulated into
 two matrices:
 \begin{align}
-h &= \mathrm{ReLU}(f W) \in \mathbb{R}^{M},
-\qquad W \in \mathbb{R}^{d \times M} \text{ frozen, drawn from a fixed seed},
+h &= \mathrm{ReLU}(W^\top f) \in \mathbb{R}^{M},
+\qquad W \in \mathbb{R}^{d \times M},\quad W_{jk}\sim\mathcal N(0,1),
 \label{eq:proj}\\
 G &= \sum_n h_n h_n^{\top} \in \mathbb{R}^{M \times M},
 \qquad
@@ -436,14 +542,13 @@ C = \sum_n h_n\, \mathbf{e}_{y_n}^{\top}
    \in \mathbb{R}^{M \times |\mathcal{Y}|},
 \label{eq:gram}
 \end{align}
-where $\mathbf{e}_{y}$ is the basis vector of class $y$. The sums run over every
-sample seen since the start of the sequence.
+where $\mathbf{e}_{y}$ is the basis vector of class $y$. Each current-task
+training sample contributes once; $G$ and $C$ are accumulated in float64.
+$W$ is generated once with seed $1993$ and then frozen.
 
-Going up in dimension is deliberate: in the original $768$-dimensional space the
-classes overlap so much that no hyperplane separates them, while after the
-expansion a linear classifier is expressive enough. The nonlinearity is
-mandatory --- without it $fW$ is a linear transform of $f$ of rank at most $d$,
-and projecting into $M \gg d$ dimensions adds no separating power at all.
+The nonlinear expansion permits richer decision functions than a linear head
+on $f$. Without ReLU, $W^\top f$ remains linear in $f$ and adds no separating
+power. This does not guarantee that the expanded data become linearly separable.
 
 \subsubsection{Classification by ridge regression.}
 The output weights are the closed-form solution of a regularised least-squares
@@ -451,15 +556,12 @@ problem:
 \begin{equation}
 W_{\mathrm{out}} = (G + \lambda I)^{-1} C \in \mathbb{R}^{M \times |\mathcal{Y}|},
 \qquad
-s = h^{\top} W_{\mathrm{out}} \in \mathbb{R}^{|\mathcal{Y}|} .
+s = W_{\mathrm{out}}^{\top} h \in \mathbb{R}^{|\mathcal{Y}|} .
 \label{eq:ridge}
 \end{equation}
-No separate dimensionality-reduction step is needed: $W_{\mathrm{out}}$ collapses
-$M$ dimensions to $|\mathcal{Y}|$ in one product, so the trajectory is
-$768 \to 10^4 \to |\mathcal{Y}|$ and the expansion exists \emph{in order to make}
-the linear step down work. The Gram inverse is what makes it work: the
-post-nonlinearity dimensions are strongly correlated, and
-$(G + \lambda I)^{-1}$ decorrelates them.
+The implementation solves the regularised system rather than explicitly
+inverting it. The map takes $768$ input features through $10^4$ nonlinear
+features to $|\mathcal Y|$ class scores.
 
 \subsubsection{Two inherited properties.}
 Both $G$ and $C$ in (\ref{eq:gram}) are \emph{sums} over samples, and addition
@@ -475,10 +577,10 @@ classes can fall while their statistics sit untouched. Nor is the feature map
 fixed across orderings: features come from the first task's adapter, so a
 different task order yields a different extractor and a different $G$. The
 property rules out one mechanism of forgetting --- the overwriting of old
-evidence --- not the phenomenon. At the same time
-the sizes of the two matrices do not depend on how many samples have been seen,
-and no per-sample feature is ever retained, so the exemplar-free protocol is
-preserved by the structure of the computation itself.
+evidence --- not the phenomenon. At the same time the sizes of the two matrices
+do not depend on how many samples have been seen, and no per-sample feature is
+ever retained, so the exemplar-free protocol is preserved by the structure of
+the computation itself.
 
 \subsection{Two-Stage Fusion}
 
@@ -487,24 +589,19 @@ span roughly one unit while the logits $\ell$ span roughly thirty-five, so a
 direct blend would let $\ell$ dominate at every weight. Each source is therefore
 standardised per sample before blending:
 \begin{equation}
-z(v) = \frac{v - \mathrm{mean}(v)}{\mathrm{std}(v)} ,
+z(v) = \frac{v - \mathrm{mean}(v)}{\sigma_\epsilon(v)},
+\qquad \sigma_\epsilon(v)=\max\{\mathrm{std}(v),10^{-6}\},
 \label{eq:znorm}
 \end{equation}
-with the mean and standard deviation computed separately for each sample, over
-the classes seen so far only.
+where $\mathrm{std}$ is the population standard deviation. Moments are
+over seen tasks in Stage 1 and seen classes in Stage 2, excluding unseen entries.
 
 \subsubsection{First stage: fusion at the routing level.}
-This stage runs \emph{before} any adapter is attached, so the routed logits
-$\ell$ of (\ref{eq:logits}) do not exist yet; the signal it replaces is the
-first matching step, and the scores it consumes are TII's own. Write
-$u \in \mathbb{R}^{|\mathcal{Y}|}$ for the class scores of the auxiliary
-classifier in (\ref{eq:tii}), taken before normalisation. Both $u$ and the
-projection head's $s$ score \emph{classes}, whereas routing needs scores over
-\emph{tasks}. We convert by taking the maximum over each task's class set, since
-a task deserves to be selected when \emph{some} class of its own scores highly,
-not when its classes score highly on average:
+Stage 1 runs after the initial adapted pass and before DRM. Its input is $r$,
+the shared-head logits under the adapter selected by bare TII, not auxiliary
+logits $u$. Both $r$ and RP scores $s$ are mapped to seen tasks:
 \begin{equation}
-u^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} u_c ,
+r^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} r_c ,
 \qquad
 s^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} s_c ,
 \qquad t = 1,\dots,\hat{T},
@@ -513,25 +610,18 @@ s^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} s_c ,
 with $\hat{T}$ the number of tasks seen so far; classes of unseen tasks never
 enter either maximum. The two vectors are blended after standardisation:
 \begin{equation}
-\mathrm{fused} = w\, z(u^{\mathrm{task}}) + (1-w)\, z(s^{\mathrm{task}}),
+\mathrm{fused} = w\, z(r^{\mathrm{task}}) + (1-w)\, z(s^{\mathrm{task}}),
 \qquad
-\hat{t}_f = \arg\max_t\, \mathrm{fused}_t ,
+\hat{t}_{\rm DRM} = \arg\max_t\, \mathrm{fused}_t ,
 \qquad w = 0.7 .
 \label{eq:route}
 \end{equation}
-Two details of $z(\cdot)$ matter for reproduction: it divides by the
-\emph{population} standard deviation and floors the divisor at $10^{-6}$. At the
-first stage $\hat{T}=1$, where the Bessel-corrected estimator divides by zero and
-returns a NaN no floor repairs, while the population estimator returns $0$, which
-it does. Later stages differ by a constant $\sqrt{\hat{T}/(\hat{T}-1)}$ shared by
-both sources, so it cancels in the arg max.
-
-The identity $\hat{t}_f$ replaces the output of (\ref{eq:tii}) and is handed to
-DRM and CRM. We replace \emph{exactly one} module, the first matching step;
-every downstream mechanism is untouched. At $w = 1.0$ the fused ordering is that
-of $u^{\mathrm{task}}$, so this stage alone reduces to the baseline's first
-matching step --- though recovering the baseline needs $\beta = 0$ as well,
-since the second stage has its own weight.
+For one seen task the standard deviation is zero, so the floor keeps the
+operation finite. The fused task replaces the baseline DRM proposal
+$\mathcal T(\arg\max r)$; the initial TII match, CRM candidate rule, confidence
+test and shared head are unchanged. At $w=1$, the ordering is that of
+$r^{\rm task}$ and the baseline DRM proposal is recovered. Recovering the
+full baseline additionally requires $\beta=0$.
 
 \subsubsection{Second stage: gated fusion at the classification level.}
 Because $\ell$ comes from the shared head, it frequently predicts the correct
@@ -539,13 +629,9 @@ class in spite of a wrong routing decision. We therefore use the
 random-projection head itself as a secondary classifier, this time taking its
 class scores $s$.
 
-A fixed weight is the wrong instrument. It spends the same share of the decision
-on a sample the primary head has already named with certainty as on one it is
-hesitating over, and the former outnumber the latter overwhelmingly; paying there
-only flattens a peak that was already correct. Fusion can change a prediction
-only by unseating the top-ranked class, and its most plausible challenger is the
-runner-up, so the weight is set in inverse proportion to the margin between the
-two highest-scoring classes:
+A fixed blend can alter a confident primary prediction. We instead reduce
+the RP share as the top-two probability margin grows, recognising that
+confident predictions can still be wrong:
 \begin{equation}
 \beta_i = \beta \left( 1 - \frac{p_{(1)} - p_{(2)}}{p_{(1)} + p_{(2)}} \right),
 \qquad \beta = 0.5 ,
@@ -555,84 +641,81 @@ where $p_{(1)} \geq p_{(2)}$ are the two largest probabilities of
 $\mathrm{softmax}(\ell)$ over the classes seen so far. Dividing by the sum makes
 the quantity depend only on the ratio $p_{(2)}/p_{(1)}$, that is, it measures how
 threatened the top class is, independently of how much probability mass the pair
-holds. The gate closes on decided samples and opens on contested ones.
+holds. The RP share approaches zero as the top class dominates and reaches
+$\beta$ when the top two probabilities are equal; this is a continuous weight,
+not a binary confidence test.
 
 The blend reuses (\ref{eq:znorm}) and then maps the result back onto the scale of
 $\ell$:
 \begin{align}
 m_i &= (1 - \beta_i)\, z(\ell_i) + \beta_i\, z(s_i),
 \label{eq:mix}\\
-\hat{\ell}_i &= m_i \cdot \mathrm{std}(\ell_i) + \mathrm{mean}(\ell_i)
+\hat{\ell}_i &= m_i \cdot \sigma_\epsilon(\ell_i) + \mathrm{mean}(\ell_i)
    \in \mathbb{R}^{|\mathcal{Y}|}.
 \label{eq:affine}
 \end{align}
-The map-back in (\ref{eq:affine}) is a per-sample affine transform with a
-positive coefficient, so the ranking is unchanged; it is needed only for the
-loss, because the mixture no longer sits on the scale of $\ell$, which is the
-wrong scale for cross-entropy. It does not sit on unit scale either. For two
-standardised vectors,
-\begin{equation}
-\mathrm{Var}\big((1-\beta) z_1 + \beta z_2\big)
-  = (1-\beta)^2 + \beta^2 + 2\beta(1-\beta)\rho ,
-\label{eq:mixvar}
-\end{equation}
-with $\rho$ their correlation across classes; this equals one only when
-$\rho = 1$, and at $\beta = 0.5$ with uncorrelated sources it is $0.5$. The
-map-back therefore returns the scores to a reference scale. It is not a variance
-guarantee and not a calibration argument, and we make no calibration claim: the
-loss we report is cross-entropy at that scale, not a measure of reliability. At
-$\beta = 0$ we have $\hat{\ell} = \ell$ element-wise, so this stage also reduces
-exactly to the baseline.
+The positive affine map-back preserves rankings and restores a reference
+scale for cross-entropy, not a calibration guarantee. For standardised
+nondegenerate vectors with correlation $\rho$, when the floor is inactive,
+the mixture variance is
+$(1-\beta_i)^2+\beta_i^2+2\beta_i(1-\beta_i)\rho$, which need not equal one.
+At $\beta=0$, this stage leaves $\ell$ unchanged.
 
 \subsubsection{Cost.}
 At inference the head costs one extra adapter forward per sample, and the same
 result serves both stages. That is the head's own cost, not the pipeline's
-difference: changing the initial route also changes how many candidates DRM and
-CRM go on to examine, and we did not measure that second-order effect.
+difference: changing the DRM proposal can change the number of additional
+adapter evaluations. We did not separately measure the pipeline cost difference
+relative to the baseline.
 
 Per task the head accumulates $G$ and $C$ over the current task's training split
-and solves one ridge system, so its footprint is set by $M$ and not by how many
-samples have been seen. That footprint is not small. At $M = 10^4$ the Gram
-matrix holds $10^8$ entries, $800$~MB in the float64 the solve requires; the
-Cholesky factor and the regularised copy it consumes bring the peak near
-$2.4$~GB. A complete ten-task evaluation on ImageNet-R --- statistics, ten
-solves and all inference --- takes $283$~s on one RTX 4090 at batch $24$. We
-report the total because we did not instrument the three phases separately.
+and solves one ridge system, so its footprint is set by $M$, not by how many
+samples have been seen --- and it is not small. At $M = 10^4$ the Gram matrix
+holds $10^8$ entries, $800$~MB in the float64 the solve requires, and the
+Cholesky factor with the regularised copy brings the peak near $2.4$~GB. A
+complete ten-task evaluation on ImageNet-R takes $283$~s on one RTX 4090 at
+batch $24$; we report the total because the three phases were not instrumented
+separately.
 
-\section{Experimental Setup}
+\section{Experiments}
+\label{sec:exp}
+
+\subsection{Setup}
 \label{sec:setup}
 
 The backbone is a ViT-B/16 pre-trained on ImageNet-21K and adapted with LoRA of
-rank $8$. The four-seed study uses Split-ImageNet-R, Split-CIFAR100 and
-Split-CUB200 in $10$ tasks each; the grid of Sect.~\ref{sec:grid} replaces
+rank $8$. The four-seed study uses Split-ImageNet-R, Split-CIFAR-100 and
+Split-CUB-200 in $10$ tasks each; the grid of Sect.~\ref{sec:grid} replaces
 CUB-200 with Split-ImageNet-A and 5-Datasets, the latter a $5$-task sequence.
+The five pre-training settings are Sup-21K, MoCo-v3, iBOT-1K, iBOT-21K and DINO.
 Seeds are $42$ to $45$, with the LoRA pool and the TII module retrained from
 scratch for each. Baseline and proposed method are evaluated from the same
-checkpoints through the same code path, so a reported difference carries no
-training noise. The projection head uses $M = 10^4$ dimensions, a ReLU
-non-linearity and $\lambda = 10^4$; no temperature scaling is applied.
+checkpoints through the same code path, avoiding differences due to separate
+training runs within each seed. The projection head uses $M = 10^4$ dimensions,
+a ReLU nonlinearity and $\lambda = 10^4$; no temperature scaling is applied.
+Fusion starts at task 1. We preserve the baseline CRM settings
+(\texttt{En=gen}, threshold $-10$, and two class-derived candidate tasks).
 
-Writing $a_{i,t}$ for the accuracy on task $i$ at stage $t$, we report routing
-accuracy (Acc@task), classification accuracy at ranks one and five (Acc@1,
-Acc@5), cross-entropy Loss, and the two retention measures
-\begin{equation}
-\mathrm{Forgetting} = \frac{1}{T-1}\sum_{i=1}^{T-1}
-\Big( \max_{1 \le t \le T} a_{i,t} - a_{i,T} \Big),
-\qquad
-\mathrm{Backward} = \frac{1}{T-1}\sum_{i=1}^{T-1} \big( a_{i,T} - a_{i,i} \big).
+Acc@task in the released evaluator measures the DRM task proposal. In the
+default class-based routing path, CRM can change the output logits without
+updating the task identity passed to this metric; it is therefore not a measure
+of final adapter selection after CRM. Acc@1, Acc@5 and Loss use the final
+classification logits. Writing $a_{i,t}$ for classification accuracy on task $i$
+at stage $t$, the retention measures are
+\begin{align}
+\mathrm{Forgetting}
+ &= \frac{1}{T-1}\sum_{i=1}^{T-1}
+ \left(\max_{i\le t\le T} a_{i,t}-a_{i,T}\right),\\
+\mathrm{Backward}
+ &= \frac{1}{T-1}\sum_{i=1}^{T-1}(a_{i,T}-a_{i,i}).
 \label{eq:metrics}
-\end{equation}
-Both averages run over the $T-1$ tasks preceding the last, which contributes an
-identically zero term to each: evaluated at one stage only, its maximum and its
-final accuracy are the same entry. Dividing by $T$ instead would report every
-retention figure a factor $(T-1)/T$ --- here $10\%$ --- too small. The maximum
-runs over the stages at which task $i$ was actually evaluated, $t \ge i$. Lower
-is better for Loss and Forgetting, higher for the rest; both retention measures
-compare a task against \emph{itself} at an earlier stage rather than against
-another method, which is why they behave differently from the accuracy axes.
+\end{align}
+Both averages exclude the last task. The maximum includes only stages at which
+task $i$ has been learned. Lower is better for Loss and Forgetting; higher
+is better for the other metrics.
 
 \subsubsection{Sanity check.}
-$w = 1.0$ in (\ref{eq:route}) puts the whole routing weight on TII and
+$w = 1.0$ in (\ref{eq:route}) restores the original DRM proposal and
 $\beta = 0$ in (\ref{eq:mix}) leaves $\hat{\ell} = \ell$ element-wise. Both are
 needed, each governing one stage. With the pair set the method reproduces the
 HRM-PET baseline digit for digit on all three datasets --- $77.7914$,
@@ -641,7 +724,7 @@ difference in Table~\ref{tab:main} comes from the added components and not from
 the evaluation path. Each of $w$ and $\beta$ doubles as a continuous ablation
 axis for its own stage.
 
-\section{Results}
+\subsection{Main Results}
 \label{sec:results}
 
 Table~\ref{tab:main} reports all three datasets. Values are the mean $\pm$
@@ -666,14 +749,14 @@ improvement itself rather than the varying difficulty of the seeds.
 & Loss       & $1.23 \pm 0.01$  & $1.19 \pm 0.01$  & $-0.040 \pm 0.002$\\
 & Forgetting & $3.36 \pm 0.56$  & $3.30 \pm 0.35$  & $-0.056 \pm 0.334$\\
 & Backward   & $-3.16 \pm 0.61$ & $-3.20 \pm 0.42$ & $-0.047 \pm 0.282$\\
-\multicolumn{5}{l}{\emph{Split-CIFAR100}}\\
+\multicolumn{5}{l}{\emph{Split-CIFAR-100}}\\
 & Acc@task   & $89.77 \pm 0.11$ & $90.87 \pm 0.09$ & $+1.103 \pm 0.066$\\
 & Acc@1      & $89.78 \pm 0.03$ & $90.47 \pm 0.05$ & $+0.690 \pm 0.063$\\
 & Acc@5      & $98.65 \pm 0.03$ & $98.86 \pm 0.07$ & $+0.217 \pm 0.057$\\
 & Loss       & $0.39 \pm 0.00$  & $0.39 \pm 0.00$  & $-0.000 \pm 0.001$\\
 & Forgetting & $3.89 \pm 0.08$  & $3.74 \pm 0.12$  & $-0.156 \pm 0.098$\\
 & Backward   & $-3.87 \pm 0.07$ & $-3.73 \pm 0.11$ & $+0.142 \pm 0.097$\\
-\multicolumn{5}{l}{\emph{Split-CUB200}}\\
+\multicolumn{5}{l}{\emph{Split-CUB-200}}\\
 & Acc@task   & $93.12 \pm 0.14$ & $94.34 \pm 0.10$ & $+1.226 \pm 0.149$\\
 & Acc@1      & $86.38 \pm 0.25$ & $87.88 \pm 0.27$ & $+1.495 \pm 0.353$\\
 & Acc@5      & $97.04 \pm 0.10$ & $97.44 \pm 0.13$ & $+0.400 \pm 0.103$\\
@@ -684,38 +767,84 @@ improvement itself rather than the varying difficulty of the seeds.
 \end{tabular}
 \end{table}
 
-The six metrics are not six independent events; they measure three axes, and
-reporting by axis says more than a pooled count. The deciding quantity is the
-ratio of a change to the standard deviation of that same change: below $2$ it is
-not resolved.
+We use paired $95\%$ Student-$t$ intervals,
+$\bar\Delta\pm3.182\,s_\Delta/\sqrt{4}$. Four seeds give imprecise intervals
+that assume approximately normal seed-wise differences. The metrics are
+correlated, so we discuss axes rather than count independent confirmations.
 
 \subsubsection{Routing (Acc@task): improved.}
-The gain is $+1.10$ to $+2.26$ points at ratios between $8$ and $17$. This is
-the axis the first stage acts on directly and it carries the firmest evidence.
+The gain is $+1.10$ to $+2.26$ points, with positive paired intervals on all
+three datasets. This is the axis the first stage acts on directly.
 
 \subsubsection{Classification (Acc@1, Acc@5): improved.}
-Acc@1 rises by $+0.69$ to $+1.50$ points at ratios of $3.0$ to $11.0$, Acc@5 by
-$+0.22$ to $+1.31$ at $3.8$ to $8.9$. Routing gains do not convert fully into
-classification gains --- Sect.~\ref{sec:method} explains why the shared head
-often predicts the right class in spite of a wrong route --- but the part that
-does convert repeats across every seed.
+Acc@1 rises by $+0.69$ to $+1.50$ points and Acc@5 by $+0.22$ to $+1.31$,
+with positive paired intervals for both metrics on all three datasets.
+The full method's Acc@1 improvement repeats across every seed. These aggregate
+gains do not establish how many routing repairs also repair classification.
 
 \subsubsection{Retention (Forgetting, Backward): small, and mostly unresolved.}
 Read as paired differences over the four seeds, the $95\%$ interval from $t_3$
 covers zero in five of the six retention cells. The exception is Forgetting on
 CIFAR-100, $-0.156$ with interval $[-0.312, -0.000]$, which sits on the
 boundary. The two metrics are near mirror images --- $-0.156$ against $+0.142$
-on CIFAR-100, $-0.359$ against $+0.279$ on CUB-200 --- so counting them as two
-results counts one event twice. We therefore claim no consistent improvement on
-this axis. That is not a claim of equivalence: with four seeds the intervals
-are wide enough to hold differences that would matter, and we did not fix a
-margin in advance against which to test one. What \emph{is} resolved is the
-decomposition of Sect.~\ref{sec:grid} --- the accuracy retained on earlier tasks
-rises in every grid cell, and Backward stays near zero only because the accuracy
-at learning time rises with it.
+on CIFAR-100, $-0.359$ against $+0.279$ on CUB-200 --- and should not be
+treated as independent replications. We therefore claim no consistent
+improvement on this axis. That is not a claim of equivalence: with four seeds
+the intervals are wide enough to hold differences that would matter, and we did
+not fix a margin in advance against which to test one. The single-seed
+decomposition in Sect.~\ref{sec:grid} is descriptive: final accuracy on earlier
+tasks rises in every grid cell, while the change in Backward is small because
+accuracy at learning time also rises.
 
-\subsubsection{The full grid.}
+\subsection{Placement Against Prior Methods}
+\label{sec:prior}
+
+Table~\ref{tab:prior} places the method among the results the original work
+reports for its own baselines. The first eight rows are quoted from Table~1
+of~\cite{ref_hrmpet} under the Sup-21K setting, where they are averages over
+three seeds; the last two rows are our own runs at seed $42$, evaluated through
+the code path of Sect.~\ref{sec:setup}.
+
+\begin{table}
+\small
+\setlength{\tabcolsep}{5pt}
+\caption{Final average accuracy (\%) under the Sup-21K setting. Rows above the
+rule are quoted from Table~1 of~\cite{ref_hrmpet} and averaged over three seeds;
+the two below are ours at seed $42$. Quoted and measured rows come from
+different implementations and seed sets.}
+\label{tab:prior}
+\begin{tabular}{lrrrr}
+\hline
+Method & CIFAR-100 & ImageNet-R & ImageNet-A & 5-Datasets\\
+\hline
+DualPrompt~\cite{ref_dualprompt}   & 86.60 & 68.79 & 39.76 & 76.09\\
+S-Prompt++~\cite{ref_sprompt}      & 88.81 & 69.68 & 39.10 & 83.38\\
+CODA-Prompt~\cite{ref_coda}        & 86.94 & 70.03 & 30.96 & 62.54\\
+LAE~\cite{ref_lae}                 & 85.10 & 72.25 & 40.36 & 64.16\\
+CPrompt~\cite{ref_cprompt}         & 83.18 & 69.24 & 37.60 & 71.72\\
+InfLoRA~\cite{ref_inflora}         & 85.28 & 72.24 & 42.12 & 71.97\\
+HiDe-LoRA~\cite{ref_hide}          & 88.43 & 71.90 & 42.18 & 93.25\\
+HRM-PET~\cite{ref_hrmpet}          & 89.45 & 73.86 & 44.28 & \textbf{93.99}\\
+\hline
+HRM-PET, our run                   & 89.77 & 74.02 & 45.85 & 91.37\\
+Proposed                           & \textbf{90.53} & \textbf{75.51} & \textbf{47.42} & 93.77\\
+\hline
+\end{tabular}
+\end{table}
+
+Our reproduction of HRM-PET lands within $0.32$ points of the published figure
+on CIFAR-100 and $0.16$ on ImageNet-R, and over four seeds gives
+$73.94 \pm 0.48$ on ImageNet-R against the published $73.86 \pm 0.14$; that
+agreement is what makes quoting the other rows meaningful. It is $1.57$ above
+on ImageNet-A and $2.62$ below on 5-Datasets, so those two columns carry a
+reproduction gap the quoted rows do not share. Quoted rows come from another
+implementation and seed set: they place the work, they are not a controlled
+comparison. The controlled claim remains the paired difference against our own
+baseline in Table~\ref{tab:main}.
+
+\subsection{The Full Grid}
 \label{sec:grid}
+
 Everything above rests on one backbone. The original work covers four datasets
 by five pre-training configurations --- twenty cells, identified from traces in
 its released code --- and we rebuilt every one, evaluating both methods through
@@ -727,14 +856,15 @@ effect is largest where the baseline is strongest, up to $27.8\%$ on
 
 Retention over those twenty cells behaves in a way the summary metric hides.
 Backward averages $a_{i,T} - a_{i,i}$, final accuracy minus the accuracy each
-task reached when it was learned, so it charges a method for learning better.
+task reached when it was learned. It therefore depends on both quantities.
 Both halves rise here: final accuracy on earlier tasks improves in \emph{every
 one} of the twenty cells, by $+1.83$ on average, while accuracy at learning time
 improves by $+1.58$. Backward is the small residue of two larger movements, and
-the five cells where it worsens are cells that learned more, not cells that
-forgot more.
+in the five cells where Backward worsens, the gain at learning time exceeds
+the gain in final old-task accuracy. This explains the change but does not
+establish an absence of forgetting.
 
-\section{Ablation}
+\subsection{Ablation}
 \label{sec:ablation}
 
 We ablate \emph{cumulatively}, as the original work does, on ImageNet-R at seed
@@ -742,99 +872,117 @@ $42$ across its five pre-training configurations, whose baselines run from
 $68.47$ to $74.02$ Acc@1. Differences are reported below rather than absolute
 values, since only the differences carry the argument.
 
-\subsubsection{On Acc@1 the two stages overlap, and the gate decides how much.}
+\subsubsection{Routing gains depend on the gate.}
 Each stage alone beats the baseline on every backbone --- routing by $+0.29$ to
 $+0.74$, the classifier by $+0.51$ to $+3.07$ --- and they are far from additive.
-With the gate off they are almost entirely redundant: adding routing to the
-classifier moves Acc@1 by $-0.07$ to $+0.02$, so whatever the routing stage
-repairs, the classification stage was going to repair anyway. This is the second
-weakness of Sect.~\ref{sec:related} measured as an interaction rather than
-asserted: because the shared head spans every seen class, a corrected route
-mostly changes which adapter produced a prediction that was already right.
+With the gate off, adding routing to class fusion moves Acc@1 by only
+$-0.07$ to $+0.02$. This near-zero net effect does not establish identical
+predictions or repairs: improvements and newly introduced errors may cancel.
+A prediction-level transition audit would be needed to distinguish these cases.
 
-That redundancy is conditional, and reporting only the ungated pair would make
-it look absolute. With the gate on, routing is worth $+0.13$ to $+0.77$ and is
-positive on all five backbones; the dependence runs the other way too, the gate
-costing $-1.32$ to $+0.85$ when the classifier is alone against $-0.54$ to
-$+0.96$ once routing is present. Each repairs what the other breaks: the gate
-withholds the projection head where the routed head is confident, and a wrong
-route is one of the things that makes it confident for the wrong reason.
+With the gate on, routing adds $+0.13$ to $+0.77$ and is positive on all five
+backbones. The gate itself changes Acc@1 by $-1.32$ to $+0.85$ with class-only
+fusion, compared with $-0.54$ to $+0.96$ when routing is present. This shows an
+interaction. Re-matching may change the confidence on which the gate acts, but
+aggregate accuracies do not identify which predictions are repaired or harmed.
 
 A single seed cannot settle a difference of a few tenths, so
 Table~\ref{tab:classonly} repeats the comparison that matters --- the full
-method against its second stage alone --- over four seeds.
+method against ungated class-only fusion --- over four seeds.
 
-\begin{table}
+\begin{table}[t]
+\centering
 \small
-\setlength{\tabcolsep}{4.5pt}
-\caption{The second stage alone against the full method, Acc@1, mean $\pm$
-standard deviation over seeds 42--45. The last two rows give the paired
-difference and its $95\%$ confidence interval, from $t_3$ on the four per-seed
-differences.}
+\setlength{\tabcolsep}{3.5pt}
+\caption{Full method versus ungated class-only fusion, Acc@1 over seeds
+42--45. Class-only uses $w=1$, $\beta=0.5$, no gate; full uses $w=0.7$,
+$\beta=0.5$, margin gate. Thus $\Delta$ includes routing and gating.
+Intervals are paired over seeds.}
 \label{tab:classonly}
-\begin{tabular}{lrrr}
+\begin{tabular}{lrrrr}
 \hline
-& Split-ImageNet-R & Split-CIFAR100 & Split-CUB200\\
+Dataset & Class-only & Full & $\Delta$ & $95\%$ CI\\
 \hline
-HRM-PET                       & $73.94 \pm 0.48$ & $89.78 \pm 0.03$ & $86.38 \pm 0.25$\\
-Class stage only              & $74.49 \pm 0.14$ & $90.15 \pm 0.16$ & $88.01 \pm 0.21$\\
-Both stages, gated (proposed) & $75.18 \pm 0.24$ & $90.47 \pm 0.05$ & $87.88 \pm 0.27$\\
-\hline
-Paired difference & $+0.69$ & $+0.33$ & $-0.13$\\
-$95\%$ CI & $[+0.36, +1.01]$ & $[+0.03, +0.62]$ & $[-0.48, +0.23]$\\
+ImageNet-R & $74.49\pm0.14$ & $75.18\pm0.24$ & $+0.69$ & $[+0.36,+1.01]$\\
+CIFAR-100 & $90.15\pm0.16$ & $90.47\pm0.05$ & $+0.33$ & $[+0.03,+0.62]$\\
+CUB-200 & $88.01\pm0.21$ & $87.88\pm0.27$ & $-0.13$ & $[-0.48,+0.23]$\\
 \hline
 \end{tabular}
 \end{table}
 
-Over four seeds the first stage earns its place on two benchmarks of three: the
-interval excludes zero on ImageNet-R and CIFAR-100, and the difference is
-positive on every individual seed of both. On CUB-200 it does not --- $-0.13$
-with an interval spanning zero --- so there the classification stage alone is as
-good as the full method and possibly better, and we report that rather than
-average it away. CIFAR-100 carries the most weight, being the one benchmark here
-on which no hyper-parameter was chosen: had the effect appeared only on
-ImageNet-R, where $w$, $\beta$ and the gate were all selected, it could not be
-separated from selection bias.
+On ImageNet-R and CIFAR-100, the full method exceeds ungated class-only fusion:
+their paired intervals exclude zero. On CUB-200 the difference is unresolved,
+which does not establish equivalence. These comparisons cannot isolate routing
+because they also change the gate. The isolated routing effect conditional on
+gating is supported only by the preceding single-seed, five-backbone ablation.
+CIFAR-100 was not used to select the reported hyperparameters and provides a
+transfer check.
 
-The first stage is also the only component that moves Acc@task, by $+2.18$ to
-$+3.95$ across the grid of Sect.~\ref{sec:grid}, an axis a routing method
-reports in its own right. But the two Acc@1 contributions must not be added.
-Note also that the classifier's isolated contribution is smallest by far on
-Sup-21K, $+0.51$ against $+2.23$ to $+3.07$ on the other four --- and Sup-21K is
-the backbone every design decision was taken on.
+The first stage is also the only component that moves Acc@task, an axis a
+routing method reports in its own right. But the two Acc@1 contributions must
+not be added. Note also that the classifier's isolated contribution is smallest
+by far on Sup-21K, $+0.51$ against $+2.23$ to $+3.07$ on the other four --- and
+Sup-21K is the backbone every design decision was taken on.
 
-\section{Limitations}
+\subsection{Sensitivity to the Mixing Weights}
+\label{sec:weights}
+
+The two weights were fixed sequentially: $w$ before the second stage existed,
+$\beta$ afterwards. Because both act on the same prediction, this raises the
+question of whether the second stage shifts the optimum of the first.
+We measured Acc@1 over the joint grid
+$w \in \{0.6, 0.7, 0.8\} \times \beta \in \{0.3, 0.5, 0.7\}$ on ImageNet-R at
+seed $42$ with the margin gate active.
+
+The two barely interact. $\beta = 0.5$ is best at all three values of $w$ ---
+giving $75.61$, $75.51$ and $75.50$ for $w = 0.6$, $0.7$ and $0.8$ --- and its
+neighbours lose by comparable amounts in every row, the whole grid spanning
+$75.12$ to $75.61$. Tuning the two in sequence therefore costs nothing
+measurable here.
+
+Acc@1 is also nearly flat in $w$, while the routing axis is not. At
+$\beta = 0.5$ the three values of $w$ span $0.11$ points of Acc@1, whereas
+Acc@task spans $1.01$: $80.39$, $79.97$ and $79.37$. Lowering $w$ buys routing
+accuracy of which roughly one ninth reaches Acc@1 --- the second weakness of
+Sect.~\ref{sec:method}, measured along a continuous axis rather than asserted.
+
+We therefore do not claim $w = 0.7$ is optimal. Over four seeds $w = 0.6$ leads
+by $0.17$ points and on this grid by $0.10$, both smaller than the $0.416$
+seed-to-seed standard deviation of the Acc@1 change itself, so the two are
+unresolved at this sample size. We report $w = 0.7$ because every other number
+in this paper was measured at it.
+
+\subsection{Limitations}
 \label{sec:limits}
 
-Hyper-parameters were selected on ImageNet-R, so that dataset does not
-contribute independent evidence; CIFAR-100 and CUB-200 do, and the first-stage
-result of Table~\ref{tab:classonly} rests on CIFAR-100 for exactly that reason.
-The four-seed protocol covers one backbone, and the twenty-cell grid covers one
-seed; no cell has both, and the single-seed ablation of Sect.~\ref{sec:ablation}
-inherits that limit. We claim no consistent improvement on the retention axis,
-and did not fix in advance the margin a non-inferiority claim would need.
-Finally, the method inherits whatever the frozen pipeline provides: it never
-modifies training, so the error that remains when routing is correct and both
-heads are consulted lies outside its reach.
+Design choices were explored on ImageNet-R, so its results are not independent
+of model selection. The research record also includes development experiments
+on CUB-200; it is not an untouched holdout. CIFAR-100 tests transfer of the
+reported configuration, but additional seeds do not remove selection bias.
+The main comparison covers four seeds on one backbone; the broader grid, the
+conditional routing ablation and the weight grid use one seed.
+Table~\ref{tab:classonly} changes routing and gating jointly; a four-seed
+class-plus-gate control is still needed to isolate routing. The rows quoted in
+Table~\ref{tab:prior} come from another implementation, and our reproduction
+differs from the published baseline by $-2.62$ points on 5-Datasets. We claim
+no consistent retention benefit or non-inferiority. Runtime is not split into
+accumulation, solving and inference; prediction-level repair/harm counts were
+not measured.
 
 \section{Conclusion}
 
-Two fusion stages, both at inference and neither requiring retraining, improve
-two of the three axes measured: routing by $+1.10$ to $+2.26$ points and
-classification by $+0.69$ to $+1.50$ points, across three datasets and four
-seeds, by several times the seed-to-seed standard deviation. The retention axis
-shows no change distinguishable from zero and we claim none. The first stage
-exploits the complementarity of two routing signals that fail on different
-samples; the second exploits the fact that the second signal is already a
-complete classifier that the original architecture discards.
-
-What makes us believe the result is not a property of one backbone or one
-dataset is the full grid: over the four datasets and five backbones the original
-work covers, no cell moves the wrong way on
-either accuracy axis, and it does so over baselines spanning nearly a factor of
-three, from $31.8$ to $93.8$ Acc@1. Read as relative error reduction the effect
-is largest where the baseline is strongest, up to $27.8\%$ on 5-Datasets, which
-is where an absolute reading makes the method look weakest.
+A fixed-feature RP classifier complements HRM-PET at two decisions: the DRM
+task proposal and final classification. The full method improves routing and
+classification across three datasets and four seeds, with Acc@1 gains of
+$0.69$--$1.50$ percentage points. A single-seed twenty-cell study extends this
+evidence across pre-training settings. Ablations show a gate-dependent routing
+contribution; the four-seed comparison supports the joint addition of routing
+and gating on two of three datasets. A joint grid over the two mixing weights
+shows they barely interact and that classification accuracy is nearly flat in
+the routing weight, so the reported $w$ is not a resolved optimum. These
+accuracy gains do not establish a consistent reduction in forgetting. The
+method trades an additional fixed-adapter forward and task-wise ridge fitting
+for evidence reused at both decisions.
 
 %
 \begin{credits}
@@ -855,7 +1003,7 @@ We thank our supervisor for comments on this manuscript.
 % the original publication: years and author-name spellings may differ. If
 % BibTeX is used, declare \bibliographystyle{splncs04}.
 %
-\begin{thebibliography}{8}
+\begin{thebibliography}{99}
 
 \bibitem{ref_hrmpet}
 Wang, W., Jia, G., Liu, X., Lin, L., Yang, J.: Hybrid re-matching for continual
@@ -926,6 +1074,38 @@ model based class-incremental learning. Knowledge-Based Systems (2025)
 \bibitem{ref_dlepem}
 Zhao, H., Liu, R., Liu, Y.: Dynamic LoRA-experts and prototype-ensemble matching
 for class-incremental learning. Applied Sciences \textbf{16}(12), 6153 (2026)
+
+% The four entries below accompany the quoted rows of Table 3. Author lists are
+% transcribed from the reference list of the HRM-PET paper.
+
+\bibitem{ref_sprompt}
+Wang, Y., Huang, Z., Hong, X.: S-Prompts learning with pre-trained transformers:
+an Occam's razor for domain incremental learning. In: NeurIPS (2022)
+
+\bibitem{ref_lae}
+Gao, Q., Zhao, C., Sun, Y., Xi, T., Zhang, G., Ghanem, B., Zhang, J.: A unified
+continual learning framework with general parameter-efficient tuning. In: ICCV
+(2023)
+
+\bibitem{ref_cprompt}
+Gao, Z., Cen, J., Chang, X.: Consistent prompting for rehearsal-free continual
+learning. In: CVPR (2024)
+
+\bibitem{ref_inflora}
+Liang, Y.S., Li, W.J.: InfLoRA: interference-free low-rank adaptation for
+continual learning. In: CVPR (2024)
+
+% The two analytic-learning entries below were checked against the NeurIPS
+% proceedings page and the arXiv record respectively.
+
+\bibitem{ref_acil}
+Zhuang, H., Weng, Z., Wei, H., Xie, R., Toh, K.A., Lin, Z.: ACIL: analytic
+class-incremental learning with absolute memorization and privacy protection.
+In: NeurIPS (2022)
+
+\bibitem{ref_dsal}
+Zhuang, H., He, R., Tong, K., Zeng, Z., Chen, C., Lin, Z.: DS-AL: a dual-stream
+analytic learning for exemplar-free class-incremental learning. In: AAAI (2024)
 
 \end{thebibliography}
 \end{document}
