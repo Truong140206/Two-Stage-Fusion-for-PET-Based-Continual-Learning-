@@ -69,6 +69,30 @@ CIFAR-100 and the five constituents of 5-Datasets download automatically.
 ImageNet-R and ImageNet-A are rebuilt from their public parquet mirrors by
 `tools/imagenet_a_from_parquet.py`.
 
+## Self-supervised backbone weights
+
+The Sup-21K setting needs nothing extra: `timm` fetches the ImageNet-21K weights
+on first use. The other four pre-training settings load a checkpoint from a
+**hard-coded `./checkpoints/` path** and will raise `FileNotFoundError` without
+it. Create the directory at the repository root and place these files in it:
+
+| `--model` | File | Read from | Upstream project |
+|---|---|---|---|
+| `vit_base_patch16_224_dino` | `dino_vitbase16_pretrain.pth` | top level | facebookresearch/dino |
+| `vit_base_patch16_224_ibot` | `checkpoint_teacher.pth` | key `state_dict` | bytedance/ibot, ImageNet-1K |
+| `vit_base_patch16_224_21k_ibot` | `checkpoint.pth` | key `teacher` | bytedance/ibot, ImageNet-21K |
+| `vit_base_patch16_224_mocov3` | `mocov3-vit-base-300ep.pth` | key `model` | facebookresearch/moco-v3, 300 epochs |
+| `vit_base_patch16_224_mae` | `mae_pretrain_vit_base.pth` | key `model` | facebookresearch/mae |
+
+The "read from" column is the dictionary key the loader indexes, which is what
+distinguishes the release variants: a checkpoint that unpickles to a bare
+state dict will fail on `['state_dict']` and vice versa. DINO's file is the one
+named in this repository's own `default_cfgs`, at
+`https://dl.fbaipublicfiles.com/dino/dino_vitbase16_pretrain/dino_vitbase16_pretrain.pth`.
+
+Only the twenty-cell grid of Sect. 4.4 uses these four settings. Every result on
+the main three-dataset table runs on Sup-21K alone.
+
 ## Training
 
 Two stages per dataset, in order: the task-identity module, then the LoRA pool.

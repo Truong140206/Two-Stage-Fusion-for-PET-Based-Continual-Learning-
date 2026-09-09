@@ -19,3 +19,10 @@ pyarrow
 
 # Only needed to run the tests.
 pytest
+
+# Not listed as a dependency on purpose. utils.py can build CLIP text
+# embeddings for the semantic CTIRD path, behind --semantic_* flags that no
+# reported result uses. Both imports sit in try/except, so the package being
+# absent costs nothing. If you do want that path: open_clip_torch from PyPI, or
+# OpenAI's clip, which installs from git rather than PyPI and would therefore
+# break `pip install -r requirements.txt` if it were listed here.
