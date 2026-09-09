@@ -193,14 +193,15 @@ here are seed-$42$ measurements, separate from the evaluation of Sect.~\ref{sec:
 
 \subsubsection{Task-identity inference (TII).}
 The input image is passed through the \emph{bare} backbone, with no adapter
-attached, to obtain a query feature $q(x) = h(x;\theta_{\mathrm{ptm}})$. That
+attached, to obtain a query feature $q(x) = \phi(x;\theta_{\mathrm{ptm}})$,
+writing $\phi$ for the backbone under whatever adapter it is given. That
 feature enters an auxiliary classifier trained with cross-entropy, which gives
 unnormalised class logits $u = g(q(x); \theta_\omega)$. The initial match is
 then $t_0=\mathcal T(\arg\max_c u_c)$.
 
 \subsubsection{Re-matching (DRM and CRM).}
 The first adapted pass attaches $p_{t_0}$ and produces
-$r=g_{\theta_g}(h(x;p_{t_0},\theta_{\rm ptm}))$. DRM proposes the task of
+$r=g_{\theta_g}(\phi(x;p_{t_0},\theta_{\rm ptm}))$. DRM proposes the task of
 $\arg\max r$ and evaluates its adapter when it differs from $t_0$; our fusion
 modifies this proposal, not the preceding bare TII pass. CRM selects
 low-confidence samples from $r$ by the baseline's generalised-entropy threshold
@@ -213,7 +214,7 @@ guarantees that accuracy cannot decrease.
 \subsubsection{Shared classification head.}
 The selected parameter set is attached to the backbone, and the shared head
 produces a score vector over all classes seen so far,
-$\ell = g(h(x; p_{\hat{t}}, \theta_{\mathrm{ptm}}); \theta_g)
+$\ell = g(\phi(x; p_{\hat{t}}, \theta_{\mathrm{ptm}}); \theta_g)
 \in \mathbb{R}^{|\mathcal{Y}|}$, predicting $\hat{y} = \arg\max_c \ell_c$, where
 $\hat{t}$ is the identity after DRM and CRM. Classes not yet seen are masked
 with $-\infty$.
@@ -354,7 +355,7 @@ deviation floored at $10^{-6}$.
 \draw[arr,draw=io] (8.67,8.35) -- (8.67,8.13);
 \node[circle,draw=ir,fill=ir!14,line width=.8pt,minimum size=.64cm,inner sep=1pt,text=ir] (class) at (10.45,7.69) {$F_C$};
 \draw[arr] (9.22,7.69) -- node[above] {$\ell$} (class);
-\node[tinylabel,text=ir] at (10.45,8.42) {Stage 2\\class fusion};
+\node[tinylabel,text=ir] at (10.45,8.42) {Stage 2\\gated class fusion};
 \node[inner sep=0pt] at (11.67,7.69)
   {\includegraphics[width=.73cm]{mallard.jpg}};
 \draw[arr,draw=ir] (class) -- (11.23,7.69);
@@ -398,7 +399,7 @@ deviation floored at $10^{-6}$.
 \node[tinylabel] at (.73,3.62) {Task $t$};
 \draw[arr,draw=it] (1.20,4.15) -- (1.79,4.15);
 \pic[scale=.70] at (2.22,4.15) {net};
-\node[tinylabel,text=it] at (2.22,3.62) {Fixed $\phi$};
+\node[tinylabel,text=it] at (2.35,3.62) {Fixed, as in (a)};
 \draw[arr,draw=it] (2.65,4.15) -- node[tinylabel,above] {$h,y$} (3.66,4.15);
 \pic at (4.15,4.15) {matrix={ip/$G$}};
 \node[tinylabel,text=ip] at (5.00,4.64) {Accumulate};
