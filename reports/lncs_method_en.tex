@@ -117,27 +117,21 @@ measure what each operation contributes, and say so where the evidence does not
 settle the question.
 
 \subsubsection{Contributions.}
-\begin{itemize}
-\item We examine unused complementary evidence in
-      HRM-PET~\cite{ref_hrmpet} and show that a better task proposal does not
-      automatically become a better class prediction because the
-      shared head frequently predicts the correct class in spite of a wrong
-      route (Sect.~\ref{sec:method}).
-\item We show that a second-order head over a frozen random projection of the
-      existing features, fitted in closed form and never by gradient descent,
-      supplies a complementary source of evidence with partially different
-      errors from the first, and we fuse the two at the routing and the
-      classification level alike, entirely at inference time.
-\item We evaluate on three datasets over four seeds and report by axis: routing
-      improves by $+1.10$ to $+2.26$ points and classification by $+0.69$ to
-      $+1.50$, each several times the seed-to-seed standard deviation, while the
-      two retention metrics show no consistent improvement
-      (Sect.~\ref{sec:exp}).
-\item We reconstruct the full grid the original work covers --- four datasets by
-      five pre-training configurations, identified from traces in its released
-      code. All $20$ cells improve on both accuracy axes, over baselines that
-      span from $31.8$ to $93.8$ Acc@1 (Sect.~\ref{sec:grid}).
-\end{itemize}
+We examine unused complementary evidence in HRM-PET~\cite{ref_hrmpet} and show
+that a better task proposal does not automatically become a better class
+prediction, because the shared head frequently predicts the correct class in
+spite of a wrong route (Sect.~\ref{sec:method}). We show that a second-order
+head over a frozen random projection of the existing features, fitted in closed
+form and never by gradient descent, supplies evidence with partially different
+errors, and we fuse the two at the routing and the classification level alike,
+entirely at inference time. We evaluate on three datasets over four seeds and
+report by axis: routing improves by $+1.10$ to $+2.26$ points and classification
+by $+0.69$ to $+1.50$, each several times the seed-to-seed standard deviation,
+while the two retention metrics show no consistent improvement
+(Sect.~\ref{sec:exp}). We reconstruct the full grid the original work covers ---
+four datasets by five pre-training configurations, identified from traces in its
+released code --- where all $20$ cells improve on both accuracy axes, over
+baselines spanning $31.8$ to $93.8$ Acc@1 (Sect.~\ref{sec:grid}).
 
 \section{Related Work}
 \label{sec:related}
@@ -155,14 +149,12 @@ baseline, substitutes LoRA adapters~\cite{ref_lora} for prompts and adds
 re-matching stages that revisit the initial decision. Later work enlarges the
 expert family: MoTE~\cite{ref_mote} combines task-specific experts, and
 DLEPEM~\cite{ref_dlepem} combines general and adapted prototypes for matching.
-Our contribution is specifically the reuse of a ridge head at both re-matching
-and class prediction, rather than a claim that prior work never combines evidence.
 
 \subsubsection{Closed-form solutions in continual learning.}
 A separate line replaces gradient descent on the classifier with a solution
 written in closed form, which removes the mechanism by which sequential updates
 overwrite one another. Nearest-class-mean prototypes are the simplest instance,
-and ADaM~\cite{ref_adam} adapts the backbone on the first task only, then reads
+and APER~\cite{ref_adam} adapts the backbone on the first task only, then reads
 frozen features. Analytic continual learning states the problem as least squares
 directly: ACIL~\cite{ref_acil} recasts class-incremental learning as a recursive
 least-squares problem in which a correlation matrix rather than a sample buffer
@@ -170,34 +162,29 @@ carries the past, yielding a model equal to the one a joint fit would produce,
 and DS-AL~\cite{ref_dsal} adds a second stream to recover nonlinear capacity
 that a single linear solve gives up. RanPAC~\cite{ref_ranpac} reaches the same
 form from the feature side: frozen features through a fixed random projection,
-second-order statistics accumulated across tasks, one ridge system solved. On
-Split-ImageNet-R it reports a nonlinear projection head that outperforms its
-joint linear probe~\cite{ref_ranpac}.
+second-order statistics accumulated across tasks, one ridge system solved.
 
-Our head belongs to this family and we claim no novelty in it --- the
-projection, the Gram accumulation and the ridge solve are RanPAC's. What differs
-is its role. These methods use the closed-form classifier as the entire
-predictor and discard routing; we keep the routing pipeline and consult the same
-solved head twice, once on the task decision and once on the class decision.
+Our head belongs to this family and we claim no novelty in it: the projection,
+the Gram accumulation and the ridge solve are RanPAC's. What differs is its
+role. These methods use the closed-form classifier as the whole predictor and
+discard routing; we keep the routing pipeline and consult the solved head twice.
 
 \subsubsection{Correcting the classifier after the fact.}
 Class-incremental classifiers lean towards recent classes, and the survey of
 Masana et al.~\cite{ref_survey} locates the bias in both the bias terms and the
-classifier weight norms. Corrections follow the diagnosis:
-iCaRL~\cite{ref_icarl} classifies to the nearest exemplar mean;
-BiC~\cite{ref_bic} learns a per-task affine map on the logits from a held-out
-split; Weight Aligning~\cite{ref_wa} rescales new-class weight norms to match
-the old; LUCIR~\cite{ref_lucir} normalises features and weights before the
-softmax. We keep the adapters, auxiliary classifier and shared head fixed,
-and retain no exemplars. Current-task training data are still needed to fit
-the RP head. The fusion of Sect.~\ref{sec:method} acts on scores at inference;
-its extra fixed-adapter pass is included in the reported cost.
+classifier weight norms. Corrections follow: iCaRL~\cite{ref_icarl} classifies
+to the nearest exemplar mean; BiC~\cite{ref_bic} learns a per-task affine map on
+the logits from a held-out split; Weight Aligning~\cite{ref_wa} rescales
+new-class weight norms to match the old; LUCIR~\cite{ref_lucir} normalises
+features and weights before the softmax. We keep the adapters, auxiliary
+classifier and shared head fixed and retain no exemplars, though current-task
+data are still needed to fit the RP head, whose scores we fuse at inference at a
+cost included in the reported total.
 
 \subsection{HRM-PET: The Baseline We Build On}
 
-We use the released HRM-PET~\cite{ref_hrmpet} inference path. The diagnostics
-quoted in this subsection are measurements at seed $42$; they motivate the
-design and are separate from the evaluation of Sect.~\ref{sec:exp}.
+We use the released HRM-PET~\cite{ref_hrmpet} inference path. Diagnostics quoted
+here are seed-$42$ measurements, separate from the evaluation of Sect.~\ref{sec:exp}.
 
 \subsubsection{Task-identity inference (TII).}
 The input image is passed through the \emph{bare} backbone, with no adapter
@@ -214,15 +201,14 @@ The initial match is $t_0=\mathcal T(\arg\max_c u_c)$.
 \subsubsection{Re-matching (DRM and CRM).}
 The first adapted pass attaches $p_{t_0}$ and produces
 $r=g_{\theta_g}(h(x;p_{t_0},\theta_{\rm ptm}))$. DRM proposes the task of
-$\arg\max r$ and evaluates its adapter when it differs from $t_0$.
-The proposed fusion modifies this task proposal, not the preceding bare TII
-pass. CRM processes low-confidence samples selected from $r$ using the
-baseline's generalised-entropy threshold. It compares the current logits with
-an alternative adapter associated with the second-ranked class of $r$, using
-the baseline log-sum-exp score. Thus CRM is confidence-triggered; it is not
+$\arg\max r$ and evaluates its adapter when it differs from $t_0$; our fusion
+modifies this proposal, not the preceding bare TII pass. CRM selects
+low-confidence samples from $r$ by the baseline's generalised-entropy threshold
+and compares the current logits, under the baseline log-sum-exp score, with the
+adapter of the second-ranked class of $r$; it is confidence-triggered, not
 restricted to cases where the two task identities agree. Both operations reuse
-trained modules and can require further adapter forwards. Re-matching is a
-heuristic, not a guarantee that classification accuracy cannot decrease.
+trained modules and can require further adapter forwards, and re-matching is a
+heuristic, not a guarantee that accuracy cannot decrease.
 
 \subsubsection{Shared classification head.}
 The selected parameter set is attached to the backbone, and the shared head
@@ -446,11 +432,10 @@ fusion operations. HRM-PET parameters are not retrained.
 Figure~\ref{fig:pipeline} distinguishes the initial adapted logits from the
 bare TII scores and shows both reuse paths.
 
-The RP head follows RanPAC~\cite{ref_ranpac}. Features
-$f\in\mathbb R^d$, $d=768$, are column vectors and come from ViT-B/16 with the
-first task's LoRA adapter ($p_1$ here, adapter index $0$ in code), fixed during
-accumulation and inference. No feature normalisation is applied. Changing
-adapters between tasks would mix incompatible feature spaces.
+The RP head follows RanPAC~\cite{ref_ranpac}. Features $f\in\mathbb R^d$,
+$d=768$, are column vectors from ViT-B/16 with the first task's LoRA adapter
+($p_1$ here, index $0$ in code), fixed during accumulation and inference and
+unnormalised; changing adapters between tasks would mix incompatible spaces.
 
 \subsubsection{Projection and second-order statistics.}
 The feature is projected into a high-dimensional space of size $M = 10^4$ and
@@ -483,31 +468,28 @@ W_{\mathrm{out}} = (G + \lambda I)^{-1} C \in \mathbb{R}^{M \times |\mathcal{Y}|
 s = W_{\mathrm{out}}^{\top} h \in \mathbb{R}^{|\mathcal{Y}|} .
 \label{eq:ridge}
 \end{equation}
-The implementation solves the regularised system rather than explicitly
-inverting it. The map takes $768$ input features through $10^4$ nonlinear
-features to $|\mathcal Y|$ class scores.
+The implementation solves the regularised system rather than inverting it,
+taking $768$ features through $10^4$ nonlinear ones to $|\mathcal Y|$ scores.
 
 \subsubsection{Two inherited properties.}
 Both $G$ and $C$ in (\ref{eq:gram}) are \emph{sums} over samples, so for a
 \emph{fixed} feature map they, and with them $W_{\mathrm{out}}$, do not depend
 on the order in which samples arrived: nothing an earlier task contributed is
 overwritten, and the head after $T$ tasks equals the ridge solution of a joint
-fit over every feature seen. Their sizes do not grow with the number of samples
-and no per-sample feature is retained, so the exemplar-free protocol follows
-from the structure of the computation.
-
-This is weaker than an absence of forgetting and we claim no more. Adding a task
-adds classes competing for the same arg max, so accuracy on old classes can fall
-while their statistics sit untouched; and the feature map is not fixed across
-orderings, since features come from the first task's adapter. The property rules
-out one mechanism of forgetting, not the phenomenon.
+fit over every feature seen. Their sizes do not grow with the sample count and
+no per-sample feature is retained, so the exemplar-free protocol follows from
+the structure of the computation. This is weaker than an absence of forgetting
+and we claim no more: adding a task adds classes competing for the same arg max,
+so accuracy on old classes can fall while their statistics sit untouched, and
+the feature map is not fixed across orderings, since features come from the
+first task's adapter. The property rules out one mechanism of forgetting, not
+the phenomenon.
 
 \subsection{Two-Stage Fusion}
 
-Both stages blend two vectors that live on different scales: the ridge scores $s$
-span roughly one unit while the logits $\ell$ span roughly thirty-five, so a
-direct blend would let $\ell$ dominate at every weight. Each source is therefore
-standardised per sample before blending:
+Both stages blend vectors on different scales: the ridge scores $s$ span roughly
+one unit and the logits $\ell$ roughly thirty-five, so a direct blend would let
+$\ell$ dominate at every weight. Each source is standardised per sample:
 \begin{equation}
 z(v) = \frac{v - \mathrm{mean}(v)}{\sigma_\epsilon(v)},
 \qquad \sigma_\epsilon(v)=\max\{\mathrm{std}(v),10^{-6}\},
@@ -539,9 +521,8 @@ enter either maximum. The two vectors are blended after standardisation:
 For one seen task the standard deviation is zero, so the floor keeps the
 operation finite. The fused task replaces the baseline DRM proposal
 $\mathcal T(\arg\max r)$; the initial TII match, CRM candidate rule, confidence
-test and shared head are unchanged. At $w=1$, the ordering is that of
-$r^{\rm task}$ and the baseline DRM proposal is recovered. Recovering the
-full baseline additionally requires $\beta=0$.
+test and shared head are unchanged. At $w=1$ the ordering is that of
+$r^{\rm task}$, recovering that proposal; the full baseline also needs $\beta=0$.
 
 \subsubsection{Second stage: gated fusion at the classification level.}
 Because $\ell$ comes from the shared head, it frequently predicts the correct
@@ -571,19 +552,17 @@ m_i &= (1 - \beta_i)\, z(\ell_i) + \beta_i\, z(s_i),
    \in \mathbb{R}^{|\mathcal{Y}|}.
 \label{eq:affine}
 \end{align}
-The positive affine map-back preserves rankings and restores a reference
-scale for cross-entropy, not a calibration guarantee. For standardised
-nondegenerate vectors with correlation $\rho$, when the floor is inactive,
-the mixture variance is
-$(1-\beta_i)^2+\beta_i^2+2\beta_i(1-\beta_i)\rho$, which need not equal one.
-At $\beta=0$, this stage leaves $\ell$ unchanged.
+The positive affine map-back preserves rankings and restores a reference scale
+for cross-entropy, not a calibration guarantee: for standardised nondegenerate
+vectors with correlation $\rho$ and the floor inactive, the mixture variance is
+$(1-\beta_i)^2+\beta_i^2+2\beta_i(1-\beta_i)\rho$, which need not equal one. At
+$\beta=0$ this stage leaves $\ell$ unchanged.
 
 \subsubsection{Cost.}
-At inference the head costs one extra adapter forward per sample, and the same
-result serves both stages. That is the head's own cost, not the pipeline's
-difference: changing the DRM proposal can change the number of additional
-adapter evaluations. We did not separately measure the pipeline cost difference
-relative to the baseline.
+At inference the head costs one extra adapter forward per sample, serving both
+stages. That is the head's own cost, not the pipeline's difference --- changing
+the DRM proposal can change the number of additional adapter evaluations --- and
+we did not measure that difference separately.
 
 Per task the head accumulates $G$ and $C$ over the current task's training split
 and solves one ridge system, so its footprint is set by $M$, not by how many
@@ -602,8 +581,8 @@ separately.
 
 The backbone is a ViT-B/16 pre-trained on ImageNet-21K and adapted with LoRA of
 rank $8$. The four-seed study uses Split-ImageNet-R, Split-CIFAR-100 and
-Split-CUB-200 in $10$ tasks each; the grid of Sect.~\ref{sec:grid} replaces
-CUB-200 with Split-ImageNet-A and 5-Datasets, the latter a $5$-task sequence.
+Split-CUB-200 in $10$ tasks each; the grid of Sect.~\ref{sec:grid} swaps CUB-200
+for Split-ImageNet-A and 5-Datasets, a $5$-task sequence.
 The five pre-training settings are Sup-21K, MoCo-v3, iBOT-1K, iBOT-21K and DINO.
 Seeds are $42$ to $45$, with the LoRA pool and the TII module retrained from
 scratch for each; baseline and proposed method are then evaluated from the same
@@ -626,51 +605,48 @@ at stage $t$, the retention measures are
  &= \frac{1}{T-1}\sum_{i=1}^{T-1}(a_{i,T}-a_{i,i}).
 \label{eq:metrics}
 \end{align}
-Both averages exclude the last task. The maximum includes only stages at which
-task $i$ has been learned. Lower is better for Loss and Forgetting; higher
-is better for the other metrics.
+Both averages exclude the last task, and the maximum includes only stages at
+which task $i$ has been learned. Lower is better for Loss and Forgetting.
 
 \subsubsection{Sanity check.}
 $w = 1.0$ in (\ref{eq:route}) restores the original DRM proposal and
-$\beta = 0$ in (\ref{eq:mix}) leaves $\hat{\ell} = \ell$; both are needed, each
-governing one stage. With the pair set the method reproduces the HRM-PET
-baseline digit for digit on all three datasets --- $77.7914$, $74.0191$,
-$1.2305$, the rest agreeing to the fourth decimal --- so every difference in
-Table~\ref{tab:main} comes from the added components, not the evaluation path.
-Each weight doubles as a continuous ablation axis for its own stage.
+$\beta = 0$ in (\ref{eq:mix}) leaves $\hat{\ell} = \ell$; with both set the
+method reproduces the HRM-PET baseline digit for digit on all three datasets ---
+$77.7914$, $74.0191$, $1.2305$, the rest agreeing to the fourth decimal --- so
+every difference in Table~\ref{tab:main} comes from the added components, not
+the evaluation path. Each weight doubles as a continuous ablation axis.
 
 \subsection{Main Results}
 \label{sec:results}
 
-Table~\ref{tab:main} reports all three datasets as mean $\pm$ standard deviation
-over four seeds. The change column is pairwise --- the difference is taken per
-seed and only then averaged --- so its standard deviation describes the
-stability of the improvement rather than the difficulty of the seeds.
+Table~\ref{tab:main} reports all three datasets over four seeds. The change
+column is pairwise --- taken per seed, then averaged --- so its standard
+deviation describes the stability of the improvement, not the seeds' difficulty.
 
 \begin{table}
-\small
-\setlength{\tabcolsep}{4.5pt}
-\caption{Results on three datasets, mean $\pm$ standard deviation over seeds
-42--45.}\label{tab:main}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Results on the three Split datasets, mean $\pm$ standard deviation
+over seeds 42--45.}\label{tab:main}
 \begin{tabular}{llrrr}
 \hline
-\multicolumn{2}{l}{Dataset and metric} & HRM-PET & Proposed & Change\\
+Dataset & Metric & HRM-PET & Proposed & Change\\
 \hline
-\multicolumn{5}{l}{\emph{Split-ImageNet-R}}\\
+\emph{ImageNet-R}
 & Acc@task   & $77.58 \pm 0.33$ & $79.85 \pm 0.18$ & $+2.264 \pm 0.158$\\
 & Acc@1      & $73.94 \pm 0.48$ & $75.18 \pm 0.24$ & $+1.236 \pm 0.416$\\
 & Acc@5      & $86.71 \pm 0.21$ & $88.02 \pm 0.17$ & $+1.312 \pm 0.148$\\
 & Loss       & $1.23 \pm 0.01$  & $1.19 \pm 0.01$  & $-0.040 \pm 0.002$\\
 & Forgetting & $3.36 \pm 0.56$  & $3.30 \pm 0.35$  & $-0.056 \pm 0.334$\\
 & Backward   & $-3.16 \pm 0.61$ & $-3.20 \pm 0.42$ & $-0.047 \pm 0.282$\\
-\multicolumn{5}{l}{\emph{Split-CIFAR-100}}\\
+\emph{CIFAR-100}
 & Acc@task   & $89.77 \pm 0.11$ & $90.87 \pm 0.09$ & $+1.103 \pm 0.066$\\
 & Acc@1      & $89.78 \pm 0.03$ & $90.47 \pm 0.05$ & $+0.690 \pm 0.063$\\
 & Acc@5      & $98.65 \pm 0.03$ & $98.86 \pm 0.07$ & $+0.217 \pm 0.057$\\
 & Loss       & $0.39 \pm 0.00$  & $0.39 \pm 0.00$  & $-0.000 \pm 0.001$\\
 & Forgetting & $3.89 \pm 0.08$  & $3.74 \pm 0.12$  & $-0.156 \pm 0.098$\\
 & Backward   & $-3.87 \pm 0.07$ & $-3.73 \pm 0.11$ & $+0.142 \pm 0.097$\\
-\multicolumn{5}{l}{\emph{Split-CUB-200}}\\
+\emph{CUB-200}
 & Acc@task   & $93.12 \pm 0.14$ & $94.34 \pm 0.10$ & $+1.226 \pm 0.149$\\
 & Acc@1      & $86.38 \pm 0.25$ & $87.88 \pm 0.27$ & $+1.495 \pm 0.353$\\
 & Acc@5      & $97.04 \pm 0.10$ & $97.44 \pm 0.13$ & $+0.400 \pm 0.103$\\
@@ -698,34 +674,30 @@ gains do not establish how many routing repairs also repair classification.
 
 \subsubsection{Retention (Forgetting, Backward): small, and mostly unresolved.}
 Read as paired differences over the four seeds, the $95\%$ interval from $t_3$
-covers zero in five of the six retention cells. The exception is Forgetting on
-CIFAR-100, $-0.156$ with interval $[-0.312, -0.000]$, which sits on the
-boundary. The two metrics are near mirror images --- $-0.156$ against $+0.142$
-on CIFAR-100, $-0.359$ against $+0.279$ on CUB-200 --- and should not be
-treated as independent replications. We therefore claim no consistent
-improvement on this axis. That is not a claim of equivalence: with four seeds
-the intervals are wide enough to hold differences that would matter, and we did
-not fix a margin in advance against which to test one. The single-seed
-decomposition in Sect.~\ref{sec:grid} is descriptive: final accuracy on earlier
-tasks rises in every grid cell, while the change in Backward is small because
-accuracy at learning time also rises.
+covers zero in five of the six retention cells; the exception, Forgetting on
+CIFAR-100, is $-0.156$ with interval $[-0.312, -0.000]$, on the boundary. The
+two metrics are near mirror images --- $-0.156$ against $+0.142$ on CIFAR-100,
+$-0.359$ against $+0.279$ on CUB-200 --- and are not independent replications.
+We claim no consistent improvement here, and no equivalence either: four seeds
+give intervals wide enough to hold differences that would matter, and we fixed
+no margin in advance. The single-seed decomposition in Sect.~\ref{sec:grid} is
+descriptive: final accuracy on earlier tasks rises in every grid cell, while
+Backward changes little because accuracy at learning time also rises.
 
 \subsection{Placement Against Prior Methods}
 \label{sec:prior}
 
-Table~\ref{tab:prior} places the method among the results the original work
-reports for its own baselines. The first eight rows are quoted from Table~1
-of~\cite{ref_hrmpet} under the Sup-21K setting, where they are averages over
-three seeds; the last two rows are our own runs at seed $42$, evaluated through
-the code path of Sect.~\ref{sec:setup}.
+Table~\ref{tab:prior} places the method among the baselines the original work
+reports. Its first eight rows are quoted from Table~1 of~\cite{ref_hrmpet} under
+Sup-21K, averages over three seeds; the last two are our own runs at seed $42$
+through the code path of Sect.~\ref{sec:setup}.
 
 \begin{table}
 \small
 \setlength{\tabcolsep}{5pt}
-\caption{Final average accuracy (\%) under the Sup-21K setting. Rows above the
-rule are quoted from Table~1 of~\cite{ref_hrmpet} and averaged over three seeds;
-the two below are ours at seed $42$. Quoted and measured rows come from
-different implementations and seed sets.}
+\caption{Final average accuracy (\%) under Sup-21K. Rows above the rule are
+quoted from Table~1 of~\cite{ref_hrmpet}, averaged over three seeds; the two
+below are ours at seed $42$, from a different implementation and seed set.}
 \label{tab:prior}
 \begin{tabular}{lrrrr}
 \hline
@@ -746,42 +718,40 @@ Proposed                           & \textbf{90.53} & \textbf{75.51} & \textbf{4
 \end{tabular}
 \end{table}
 
-Our reproduction of HRM-PET lands within $0.32$ points of the published figure
-on CIFAR-100 and $0.16$ on ImageNet-R, and over four seeds gives
-$73.94 \pm 0.48$ on ImageNet-R against the published $73.86 \pm 0.14$; that
-agreement is what makes quoting the other rows meaningful. It is $1.57$ above
-on ImageNet-A and $2.62$ below on 5-Datasets, so those two columns carry a
-reproduction gap the quoted rows do not share. Quoted rows come from another
-implementation and seed set: they place the work, they are not a controlled
-comparison. The controlled claim remains the paired difference against our own
-baseline in Table~\ref{tab:main}.
+Our reproduction lands within $0.32$ points of the published figure on
+CIFAR-100 and $0.16$ on ImageNet-R, and over four seeds gives $73.94 \pm 0.48$
+there against the published $73.86 \pm 0.14$; that agreement is what makes
+quoting the other rows meaningful. It is $1.57$ above on ImageNet-A and $2.62$
+below on 5-Datasets, so those columns carry a reproduction gap the quoted rows
+do not share. Quoted rows come from another implementation and seed set: they
+place the work, they are not a controlled comparison, which remains the paired
+difference in Table~\ref{tab:main}.
 
 \subsection{The Full Grid}
 \label{sec:grid}
 
-The original work covers four datasets by five pre-training configurations, and
-we rebuilt all twenty cells, evaluating both methods through one code path at
-seed $42$. Every cell improves on both accuracy axes: Acc@task by $+0.97$ to
-$+4.57$ and Acc@1 by $+0.59$ to $+3.58$, against baselines spanning $31.8$ to
-$93.8$ Acc@1. Retention over the same cells is descriptive rather than
-conclusive: final accuracy on earlier tasks rises in every one of the twenty,
-by $+1.83$ on average, while accuracy at learning time rises by $+1.58$, so
-Backward, their difference, stays small and worsens in five cells that learned
-more rather than forgot more.
+The original work covers four datasets by five pre-training configurations; we
+rebuilt all twenty cells, evaluating both methods through one code path at seed
+$42$. Every cell improves on both accuracy axes: Acc@task by $+0.97$ to $+4.57$
+and Acc@1 by $+0.59$ to $+3.58$, against baselines spanning $31.8$ to $93.8$
+Acc@1. Retention is descriptive rather than conclusive: final accuracy on
+earlier tasks rises in all twenty cells, by $+1.83$ on average, while accuracy
+at learning time rises by $+1.58$, so Backward, their difference, stays small
+and worsens in five cells that learned more rather than forgot more.
 
 \subsection{Ablation}
 \label{sec:ablation}
 
 We ablate \emph{cumulatively}, as the original work does, on ImageNet-R at seed
 $42$ across its five pre-training configurations, whose baselines run from
-$68.47$ to $74.02$ Acc@1. Differences are reported below rather than absolute
-values, since only the differences carry the argument.
+$68.47$ to $74.02$ Acc@1. Only differences are reported, since only they carry
+the argument.
 
 \subsubsection{Routing gains depend on the gate.}
 Each stage alone beats the baseline on every backbone --- routing by $+0.29$ to
 $+0.74$, the classifier by $+0.51$ to $+3.07$ --- yet they are far from additive.
 With the gate off, adding routing to class fusion moves Acc@1 by only $-0.07$ to
-$+0.02$; a near-zero net effect does not establish identical predictions, since
+$+0.02$; that near-zero net does not establish identical predictions, since
 repairs and new errors may cancel, and separating them needs a prediction-level
 audit.
 
@@ -791,59 +761,37 @@ fusion against $-0.54$ to $+0.96$ when routing is present. This is an
 interaction: re-matching may change the confidence the gate acts on, though
 aggregate accuracies again do not say which predictions move.
 
-A single seed cannot settle a difference of a few tenths, so
-Table~\ref{tab:classonly} repeats the comparison that matters --- the full
-method against ungated class-only fusion --- over four seeds.
+A single seed cannot settle a difference of a few tenths, so we repeated the
+comparison that matters --- the full method against ungated class-only fusion
+($w = 1$, $\beta = 0.5$, no gate) --- over seeds 42--45. Class-only reaches
+$74.49\pm0.14$, $90.15\pm0.16$ and $88.01\pm0.21$ Acc@1 on ImageNet-R, CIFAR-100
+and CUB-200, against $75.18\pm0.24$, $90.47\pm0.05$ and $87.88\pm0.27$ for the
+full method: paired changes of $+0.69$ $[+0.36, +1.01]$ and $+0.33$
+$[+0.03, +0.62]$, whose intervals exclude zero, and $-0.13$ $[-0.48, +0.23]$,
+which is unresolved and does not establish equivalence. The comparison cannot
+isolate routing, since it also changes the gate; the routing effect conditional
+on gating is supported only by the preceding single-seed, five-backbone
+ablation.
 
-\begin{table}[t]
-\centering
-\small
-\setlength{\tabcolsep}{3.5pt}
-\caption{Full method versus ungated class-only fusion, Acc@1 over seeds
-42--45. Class-only uses $w=1$, $\beta=0.5$, no gate; full uses $w=0.7$,
-$\beta=0.5$, margin gate. Thus $\Delta$ includes routing and gating.
-Intervals are paired over seeds.}
-\label{tab:classonly}
-\begin{tabular}{lrrrr}
-\hline
-Dataset & Class-only & Full & $\Delta$ & $95\%$ CI\\
-\hline
-ImageNet-R & $74.49\pm0.14$ & $75.18\pm0.24$ & $+0.69$ & $[+0.36,+1.01]$\\
-CIFAR-100 & $90.15\pm0.16$ & $90.47\pm0.05$ & $+0.33$ & $[+0.03,+0.62]$\\
-CUB-200 & $88.01\pm0.21$ & $87.88\pm0.27$ & $-0.13$ & $[-0.48,+0.23]$\\
-\hline
-\end{tabular}
-\end{table}
-
-On ImageNet-R and CIFAR-100, the full method exceeds ungated class-only fusion:
-their paired intervals exclude zero. On CUB-200 the difference is unresolved,
-which does not establish equivalence. These comparisons cannot isolate routing
-because they also change the gate. The isolated routing effect conditional on
-gating is supported only by the preceding single-seed, five-backbone ablation.
-CIFAR-100 was not used to select the reported hyperparameters and provides a
-transfer check.
-
-The first stage is also the only component that moves Acc@task, an axis a
-routing method reports in its own right. But the two Acc@1 contributions must
-not be added. Note also that the classifier's isolated contribution is smallest
-by far on Sup-21K, $+0.51$ against $+2.23$ to $+3.07$ on the other four --- and
-Sup-21K is the backbone every design decision was taken on.
+The first stage is also the only component that moves Acc@task, an axis routing
+methods report in its own right, though the two Acc@1 contributions must not be
+added. The classifier's isolated contribution is smallest by far on Sup-21K,
+$+0.51$ against $+2.23$ to $+3.07$ elsewhere --- the backbone every design
+decision was taken on.
 
 \subsection{Sensitivity to the Mixing Weights}
 \label{sec:weights}
 
-The two weights were fixed sequentially: $w$ before the second stage existed,
-$\beta$ afterwards. Because both act on the same prediction, this raises the
-question of whether the second stage shifts the optimum of the first.
-We measured Acc@1 over the joint grid
+The two weights were fixed sequentially, $w$ before the second stage existed and
+$\beta$ afterwards, so the second stage may have shifted the optimum of the
+first. We measured Acc@1 over the joint grid
 $w \in \{0.6, 0.7, 0.8\} \times \beta \in \{0.3, 0.5, 0.7\}$ on ImageNet-R at
 seed $42$ with the margin gate active.
 
 The two barely interact. $\beta = 0.5$ is best at all three values of $w$ ---
-giving $75.61$, $75.51$ and $75.50$ for $w = 0.6$, $0.7$ and $0.8$ --- and its
-neighbours lose by comparable amounts in every row, the whole grid spanning
-$75.12$ to $75.61$. Tuning the two in sequence therefore costs nothing
-measurable here.
+$75.61$, $75.51$ and $75.50$ for $w = 0.6$, $0.7$, $0.8$ --- its neighbours lose
+comparable amounts in every row, and the grid spans only $75.12$ to $75.61$, so
+tuning the two in sequence costs nothing measurable here.
 
 Acc@1 is also nearly flat in $w$, while the routing axis is not. At
 $\beta = 0.5$ the three values of $w$ span $0.11$ points of Acc@1, whereas
@@ -851,62 +799,61 @@ Acc@task spans $1.01$: $80.39$, $79.97$ and $79.37$. Lowering $w$ buys routing
 accuracy of which roughly one ninth reaches Acc@1 --- the second weakness of
 Sect.~\ref{sec:method}, measured along a continuous axis rather than asserted.
 
-We therefore do not claim $w = 0.7$ is optimal. Over four seeds $w = 0.6$ leads
-by $0.17$ points and on this grid by $0.10$, both smaller than the $0.416$
-seed-to-seed standard deviation of the Acc@1 change itself, so the two are
-unresolved at this sample size. We report $w = 0.7$ because every other number
-in this paper was measured at it.
+We therefore do not claim $w = 0.7$ optimal. Over four seeds $w = 0.6$ leads by
+$0.17$ points and on this grid by $0.10$, both smaller than the $0.416$
+seed-to-seed standard deviation of the Acc@1 change, so the two are unresolved
+at this sample size; we report $w = 0.7$ because every other number here was.
 
 \subsection{Limitations}
 \label{sec:limits}
 
-Design choices were explored on ImageNet-R, so its results are not independent
-of model selection. The research record also includes development experiments
-on CUB-200; it is not an untouched holdout. CIFAR-100 tests transfer of the
-reported configuration, but additional seeds do not remove selection bias.
-The main comparison covers four seeds on one backbone; the broader grid, the
-conditional routing ablation and the weight grid use one seed.
-Table~\ref{tab:classonly} changes routing and gating jointly; a four-seed
-class-plus-gate control is still needed to isolate routing. The rows quoted in
-Table~\ref{tab:prior} come from another implementation, and our reproduction
-differs from the published baseline by $-2.62$ points on 5-Datasets. We claim
-no consistent retention benefit or non-inferiority. Runtime is not split into
-accumulation, solving and inference; prediction-level repair/harm counts were
-not measured.
+Design choices were explored on ImageNet-R, and CUB-200 also carries development
+experiments, so neither is an untouched holdout; CIFAR-100 tests transfer of the
+reported configuration, but more seeds do not remove selection bias. The main
+comparison covers four seeds on one backbone, and the grid, the conditional
+routing ablation and the weight grid use one; that comparison changes routing
+and gating jointly, so a class-plus-gate control is still needed to isolate
+routing. Rows quoted in Table~\ref{tab:prior} come from another implementation
+whose 5-Datasets baseline we reproduce $2.62$ points low. We claim no consistent
+retention benefit or non-inferiority, did not split runtime into accumulation,
+solving and inference, and did not measure prediction-level repair/harm counts.
 
 \section{Conclusion}
 
-A fixed-feature RP classifier complements HRM-PET at two decisions: the DRM
-task proposal and final classification. The full method improves routing and
-classification across three datasets and four seeds, with Acc@1 gains of
-$0.69$--$1.50$ percentage points. A single-seed twenty-cell study extends this
-evidence across pre-training settings. Ablations show a gate-dependent routing
-contribution; the four-seed comparison supports the joint addition of routing
-and gating on two of three datasets. A joint grid over the two mixing weights
-shows they barely interact and that classification accuracy is nearly flat in
-the routing weight, so the reported $w$ is not a resolved optimum. These
-accuracy gains do not establish a consistent reduction in forgetting. The
-method trades an additional fixed-adapter forward and task-wise ridge fitting
-for evidence reused at both decisions.
+A fixed-feature RP classifier complements HRM-PET at two decisions, the DRM task
+proposal and final classification, improving routing and classification across
+three datasets and four seeds with Acc@1 gains of $0.69$--$1.50$ points, and
+across five pre-training settings in a single-seed twenty-cell study. Ablations
+show a gate-dependent routing contribution; the four-seed comparison supports
+adding routing and gating jointly on two of three datasets; and a joint grid
+over the mixing weights shows they barely interact, with accuracy nearly flat in
+$w$, which is therefore not a resolved optimum. The gains do not establish a
+consistent reduction in forgetting. The method trades an extra fixed-adapter
+forward and task-wise ridge fitting for evidence reused at both decisions.
 
 %
-\begin{credits}
-\subsubsection{\ackname}
-We thank our supervisor for comments on this manuscript.
-
-% The Disclosure of Interests block was removed on request. Springer requires
-% it for an actual proceedings submission, so restore it before submitting:
+% Run-in form of the acknowledgment: the credits environment's heading skip
+% pushed this single line onto the reference page. Restore the template form
+% at camera-ready, together with the Disclosure of Interests Springer wants:
+%   \begin{credits}
+%   \subsubsection{\ackname}
+%   We thank our supervisor for comments on this manuscript.
 %   \subsubsection{\discintname}
 %   The authors declare that they have no competing interests related to the
 %   content of this article.
-\end{credits}
+%   \end{credits}
+\noindent\textbf{Acknowledgment.} We thank our supervisor for comments on this
+manuscript.
 %
 % ---- Bibliography ----
 %
-% NOTE: the entries below were transcribed from the reference list of the
-% HRM-PET paper. Before the final submission each one must be checked against
-% the original publication: years and author-name spellings may differ. If
-% BibTeX is used, declare \bibliographystyle{splncs04}.
+% NOTE: the entries below were first transcribed from the reference list of the
+% HRM-PET paper and have since been checked one by one against the original
+% publications. Three differences from that list were resolved in favour of the
+% publisher record: HiDe-Prompt is NeurIPS 2023, LoRA is ICLR 2022, and the
+% RanPAC author is Parvaneh. The IJCV paper cited as ref_adam names its method
+% APER, not the ADAM of the arXiv version, and is cited by that name in the
+% text. If BibTeX is used, declare \bibliographystyle{splncs04}.
 %
 \begin{thebibliography}{99}
 
@@ -949,12 +896,12 @@ attention-based prompting for rehearsal-free continual learning. In: CVPR (2023)
 \bibitem{ref_adam}
 Zhou, D.W., Cai, Z.W., Ye, H.J., Zhan, D.C., Liu, Z.: Revisiting
 class-incremental learning with pre-trained models: generalizability and
-adaptivity are all you need. Int. J. Comput. Vis. (2024)
+adaptivity are all you need. Int. J. Comput. Vis. \textbf{133}, 1012--1032 (2025)
 
 \bibitem{ref_survey}
 Masana, M., Liu, X., Twardowski, B., Menta, M., Bagdanov, A.D., van de Weijer,
 J.: Class-incremental learning: survey and performance evaluation on image
-classification. IEEE Trans. Pattern Anal. Mach. Intell. (2023)
+classification. IEEE Trans. Pattern Anal. Mach. Intell. \textbf{45}(5), 5513--5533 (2023)
 
 \bibitem{ref_icarl}
 Rebuffi, S.A., Kolesnikov, A., Sperl, G., Lampert, C.H.: iCaRL: incremental
