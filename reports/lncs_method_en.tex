@@ -32,6 +32,11 @@
 % The photograph lives in figure_assets/ in the repository; Overleaf expects it
 % beside the source, so the path is searched in both places.
 \graphicspath{{./}{figure_assets/}}
+% Float separation trimmed by six points. With one figure and three tables the
+% template's default leaves about two lines of slack per page it places one on,
+% which was enough to push the conclusion onto the reference page. Nothing else
+% in the template's spacing is touched.
+\setlength{\textfloatsep}{12pt plus 2pt minus 4pt}
 %
 \begin{document}
 %
@@ -222,7 +227,7 @@ proposal $77.79\%$ and the RP head $77.12\%$, while the union of TII and the
 head reaches $82.99\%$. Since TII is wrong on $36.20\%$ of the set, the head
 repairs $53.0\%$ of its errors, against $62.0\%$ and $46.9\%$ on CIFAR-100
 and CUB-200. The union is an oracle that no router we build attains, and it
-compares bare TII with RP, not $r$ with $s$, the actual Stage 1 inputs.
+compares bare TII with RP rather than the actual Stage 1 inputs.
 
 A better route need not become a better prediction: $\ell$ comes from the shared
 head, which spans every class seen so far, so a mis-routed sample is often
@@ -456,8 +461,7 @@ W_{\mathrm{out}} = (G + \lambda I)^{-1} C \in \mathbb{R}^{M \times |\mathcal{Y}|
 s = W_{\mathrm{out}}^{\top} h \in \mathbb{R}^{|\mathcal{Y}|} .
 \label{eq:ridge}
 \end{equation}
-The implementation solves the regularised system rather than inverting it,
-taking $768$ features through $10^4$ nonlinear ones to $|\mathcal Y|$ scores.
+The implementation solves the regularised system rather than inverting it.
 
 \subsubsection{Two inherited properties.}
 Both $G$ and $C$ in (\ref{eq:gram}) are \emph{sums} over samples, so for a
@@ -773,7 +777,7 @@ seed $42$ with the margin gate active.
 \footnotesize
 \setlength{\tabcolsep}{9pt}
 \caption{Acc@1 over the $w \times \beta$ grid, ImageNet-R at seed $42$, full
-method with the margin gate. One seed, so no interval accompanies these cells.}
+method with the margin gate.}
 \label{tab:wbeta}
 \begin{tabular}{lrrr}
 \hline
@@ -788,45 +792,44 @@ $w = 0.8$ & 75.12 & 75.50 & 75.27\\
 
 On this grid $\beta = 0.5$ is best at every $w$ and the nine cells span $0.49$
 points, so choosing the two in sequence would have cost nothing measurable here.
-Acc@1 is nearly flat in $w$ while the routing axis is not: at
-$\beta = 0.5$ the three values of $w$ span $0.11$ points of Acc@1 but $1.01$ of
-Acc@task, $80.39$, $79.97$ and $79.37$. That one-to-nine ratio is between two
-aggregate gains: most of the routing accuracy bought by lowering $w$ does not
-reach Acc@1. It does not say that one routing repair in nine repairs a class,
-which no aggregate accuracy can say.
+Acc@1 is nearly flat in $w$ while the routing axis is not: at $\beta = 0.5$ the
+three values of $w$ span $0.11$ points of Acc@1 but $1.01$ of Acc@task, $80.39$,
+$79.97$ and $79.37$. That one-to-nine ratio is between two aggregate gains, so
+it says only that most of the routing accuracy bought by lowering $w$ does not
+reach Acc@1, not that one routing repair in nine repairs a class.
 
 The grid's maximum is $w = 0.6$ at $75.61$, not the reported $w = 0.7$ at
-$75.51$; we claim no ordering between them. $w$ was fixed before the second
-stage existed, by the criterion that all six metrics improve on every seed: over
-four seeds $w = 0.6$ gave the larger mean Acc@1 gain, $+0.48$ against $+0.31$,
-but degraded Forgetting and Backward on seed 43, which $w = 0.7$ did not. That
-comparison ran with routing fusion alone and does not carry over, and this grid
-is one seed with no paired interval. Separating the two for the full method
-needs both over seeds 42--45 at fixed $\beta$ and gate, which we have not run.
+$75.51$; it is one seed, so no interval accompanies it. Both were also run over
+seeds 42--45 at the earlier stage, routing fusion alone, and there
+$w = 0.6$ leads on Acc@1 by $+0.170$, paired interval $[+0.136, +0.204]$, and on
+Acc@task by $+0.332$, $[+0.143, +0.522]$, while both retention intervals contain
+zero. $w = 0.7$ was fixed there by the criterion that all six metrics
+improve on every seed, which $w = 0.6$ fails on seed 43, on Forgetting and
+Backward. That comparison predates the second stage, so it does not transfer to
+the full method; separating the two values there would need the same four seeds
+at fixed $\beta$ and gate, which we have not run.
 
 \subsection{Limitations}
 \label{sec:limits}
 
 Design choices were explored on ImageNet-R, and CUB-200 also carries development
 experiments, so neither is an untouched holdout; CIFAR-100 tests transfer, but
-more seeds do not remove selection bias. Only the main comparison uses four
-seeds, and it changes routing and gating jointly, so a class-plus-gate control
-is still needed to isolate routing; the grid, the conditional routing ablation
-and the weight grid are single-seed. Rows quoted in Table~\ref{tab:prior} come
-from another implementation, and on 5-Datasets our result is below the published
-HRM-PET figure. We
-claim no consistent retention benefit or non-inferiority, did not split runtime
-into its phases, and did not measure prediction-level repair/harm counts.
+more seeds do not remove selection bias. The four-seed comparison changes
+routing and gating jointly, so a class-plus-gate control is still needed to
+isolate routing, and the twenty-cell grid, the conditional routing ablation and
+the weight grid are single-seed. Rows quoted in Table~\ref{tab:prior} come from
+another implementation, and on 5-Datasets our result is below the published
+figure. We claim no consistent retention benefit or non-inferiority, did not
+split runtime into its phases, and did not measure repair/harm counts.
 
 \section{Conclusion}
 
 A fixed-feature RP classifier complements HRM-PET at two decisions, the DRM task
-proposal and final classification, for one extra fixed-adapter forward and a
-task-wise ridge fit. Acc@1 rises by $0.69$--$1.50$ points over three datasets
-and four seeds, and in all twenty cells of a single-seed grid over pre-training
-settings; the four-seed comparison supports adding routing and gating jointly on
-two of three datasets. The gains do not establish a reduction in forgetting, and
-the reported routing weight is not the maximum of the single-seed weight grid.
+proposal and final classification, at one extra adapter forward and a ridge fit
+per task. Acc@1 rises by $0.69$--$1.50$ points over three datasets and four
+seeds, and in all twenty cells of a single-seed pre-training grid; the four-seed
+comparison supports adding routing and gating jointly on two of three. The gains
+do not establish a reduction in forgetting.
 
 %
 % Run-in form of the acknowledgment: the credits environment's heading skip
