@@ -1,0 +1,30 @@
+IMAGE PROVENANCE
+figure_assets/mallard.jpg
+Work: Mallard duck .jpg
+Author: Thomas G. Barnes / U.S. Fish and Wildlife Service
+License/status: Public domain (U.S. federal-government work).
+Source and license:
+https://commons.wikimedia.org/wiki/File:Mallard_duck_.jpg
+Original file:
+https://upload.wikimedia.org/wikipedia/commons/1/1a/Mallard_duck_.jpg
+The photo is embedded unchanged, scaled by LaTeX. It is an illustration,
+not a sample with recorded model outputs.
+
+VISUAL REFERENCES INSPECTED
+1. HRM-PET, NeurIPS 2025, Figure 2:
+https://papers.nips.cc/paper_files/paper/2025/file/a978bdfeb195e4a574c0def98806346a-Paper-Conference.pdf
+Learned from: sample photos, visible parameter pool, separation of inference
+and training. No original figure is copied into the deliverable.
+
+2. RanPAC, NeurIPS 2023, Figure 1:
+https://papers.neurips.cc/paper_files/paper/2023/file/2793dc35e14003dd367684d93d236847-Paper-Conference.pdf
+Learned from: visible feature expansion and dimensionality. We do not reproduce
+or fabricate measured t-SNE clusters.
+
+3. EASE, CVPR 2024, Figure 2:
+https://openaccess.thecvf.com/content/CVPR2024/papers/Zhou_Expandable_Subspace_Ensemble_for_Pre-Trained_Model-Based_Class-Incremental_Learning_CVPR_2024_paper.pdf
+Learned from: visually separating an encoder and its task-specific adapter.
+
+All model, matrix, connection and bar graphics in the new figure are original
+editable TikZ geometry. No generative image model was used.
+
