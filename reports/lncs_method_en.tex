@@ -237,38 +237,26 @@ produces a score vector over all classes seen so far:
 where $\hat{t}$ is the identity after DRM and CRM. Classes not yet seen are
 masked with $-\infty$.
 
-\subsubsection{First weakness: unused complementary evidence.}
-The baseline derives its routing evidence from TII and subsequent shared-head
-predictions, without an independently fitted RP head. To see what a second
-source would be worth we built the head of Sect.~\ref{sec:rp} on HRM-PET's own
-LoRA features and used it as a router. At seed 42 on ImageNet-R, TII routes
-$63.80\%$ of samples correctly, HRM-PET's DRM-proposal metric is $77.79\%$ and
-the RP head alone $77.12\%$, while the \emph{union} of the two --- the fraction
-at least one routes correctly --- reaches $82.99\%$, against $92.86\%$ on
-CIFAR-100 and $96.26\%$ on CUB-200.
+\subsubsection{Two weaknesses this paper acts on.}
+The baseline draws its routing evidence from TII and the shared head alone. To
+see what a second source would be worth we built the head of
+Sect.~\ref{sec:rp} on HRM-PET's own LoRA features and used it as a router: at
+seed 42 on ImageNet-R, TII routes $63.80\%$ of samples correctly, the DRM
+proposal $77.79\%$ and the RP head $77.12\%$, while the union of TII and the
+head reaches $82.99\%$. Since TII is wrong on $36.20\%$ of the set, the head
+repairs $53.0\%$ of its errors, against $62.0\%$ and $46.9\%$ on CIFAR-100
+and CUB-200. The union is an oracle that no router we build attains, and it
+compares bare TII with RP, not $r$ with $s$, the actual Stage 1 inputs.
 
-They therefore fail on \emph{different} samples: the union exceeds TII by
-$19.19$ points of the ImageNet-R test set, and since TII is wrong on $36.20\%$
-of it, those points are $53.0\%$ of TII's errors repaired by the head, against
-$62.0\%$ and $46.9\%$ on the other two. Had they failed together the union
-could not exceed the stronger of them. The union is an oracle: it uses the
-labels to ask what a perfect combiner could reach, and no router we build
-attains it. This diagnostic compares bare TII with RP, not $r$ with $s$, the
-actual Stage 1 inputs.
-
-\subsubsection{Second weakness: better routing is not better classification.}
-$\ell$ in (\ref{eq:logits}) comes from the \emph{shared} head, which spans every
-class seen so far, so a mis-routed sample is frequently classified correctly
-anyway: correcting its route buys nothing, and re-routing a sample that was
-already correct can break it. Aggregate accuracy differences therefore do not
-measure the fraction of routing repairs that also repair a class prediction.
-
-The RP head is also a complete classifier, and a routing-only variant discards
-that evidence. On ImageNet-R the routed head classifies $74.31\%$ correctly and
-the projection head $70.08\%$, yet their union reaches $78.89\%$: even four
-points weaker overall, the head alone contributes $4.58$ percentage points of
-the test set to this union, and $2.43$ and $3.87$ on CIFAR-100 and CUB-200.
-These two measurements give the two components below.
+A better route need not become a better prediction. Because $\ell$ comes from
+the shared head, which spans every class seen so far, a mis-routed sample is
+often classified correctly anyway, so aggregate accuracy cannot say how many
+routing repairs also repair a class. The RP head is moreover a complete
+classifier that a routing-only variant would discard: on ImageNet-R the routed
+head reaches $74.31\%$ and the projection head $70.08\%$, yet their union is
+$78.89\%$, the head alone contributing $4.58$ points of the test set and $2.43$
+and $3.87$ on the other two. These two measurements give the two components
+described next.
 
 \section{Method}
 \label{sec:method}
@@ -354,7 +342,7 @@ deviation floored at $10^{-6}$.
         \node[dot,draw=it,fill=it!65] at (.42,\b) {};
     }}
 ]
-\path[use as bounding box] (0,0) rectangle (12.1,9.3);
+\path[use as bounding box] (0,3.30) rectangle (12.1,9.3);
 \node[heading,text=ib] at (0,9.12) {(a) One image, two complementary predictions};
 % A real image is repeated to make reuse of x explicit.
 \node[inner sep=0pt] (input) at (.64,7.69)
@@ -442,75 +430,11 @@ deviation floored at $10^{-6}$.
 \node[tinylabel] at (8.49,3.62) {No gradient update};
 \draw[arr,draw=ip] (10.00,4.15) -- (10.67,4.15);
 \pic at (11.18,4.15) {matrix={ip/Updated $W_{\rm out}$}};
-% The examples below are calculated from a documented, four-class toy input.
-\draw[black!25,line width=.35pt] (0,3.30) -- (12.1,3.30);
-\draw[black!20,line width=.35pt] (6.11,.18) -- (6.11,3.02);
-\node[heading,text=io] at (0,3.06) {(c) Task decision: A $\rightarrow$ B};
-\node[heading,text=ir] at (6.36,3.06) {(d) Class decision: goose $\rightarrow$ duck};
-\node[tinylabel] at (1.03,2.63) {Initial $z(r^{\rm task})$};
-\node[tinylabel] at (2.91,2.63) {RP $z(s^{\rm task})$};
-\node[tinylabel] at (4.91,2.63) {Fused, $w=0.7$};
-\draw[black!45,line width=.3pt] (0.42000000000000004,1.65) -- (1.6400000000000001,1.65);
-\fill[ib!70] (0.4900000000000001,1.65) rectangle (0.7300000000000001,1.9771);
-\draw[ib,line width=.75pt] (0.4700000000000001,1.63) rectangle (0.7500000000000001,1.9971);
-\node[tinylabel] at (0.6100000000000001,.79) {A};
-\fill[ib!70] (0.91,1.65) rectangle (1.15,1.9304);
-\node[tinylabel] at (1.03,.79) {B};
-\fill[ib!70] (1.33,1.65) rectangle (1.5700000000000003,1.0425);
-\node[tinylabel] at (1.4500000000000002,.79) {C};
-\draw[black!45,line width=.3pt] (2.3000000000000003,1.65) -- (3.52,1.65);
-\fill[ip!70] (2.37,1.65) rectangle (2.6100000000000003,1.3684);
-\node[tinylabel] at (2.49,.79) {A};
-\fill[ip!70] (2.79,1.65) rectangle (3.0300000000000002,2.2576);
-\draw[ip,line width=.75pt] (2.77,1.63) rectangle (3.0500000000000003,2.2776);
-\node[tinylabel] at (2.91,.79) {B};
-\fill[ip!70] (3.21,1.65) rectangle (3.45,1.3240);
-\node[tinylabel] at (3.33,.79) {C};
-\draw[black!45,line width=.3pt] (4.3,1.65) -- (5.5200000000000005,1.65);
-\fill[io!70] (4.37,1.65) rectangle (4.61,1.7945);
-\node[tinylabel] at (4.49,.79) {A};
-\fill[io!70] (4.79,1.65) rectangle (5.03,2.0285);
-\draw[io,line width=.75pt] (4.7700000000000005,1.63) rectangle (5.05,2.0485);
-\node[tinylabel] at (4.91,.79) {B};
-\fill[io!70] (5.21,1.65) rectangle (5.45,1.1269);
-\node[tinylabel] at (5.33,.79) {C};
-
-\node[tinylabel,text=ib] at (1.03,.49) {A selected};
-\node[tinylabel,text=io] at (4.91,.49) {B selected};
-\node[tinylabel] at (3.06,.17) {A: cat \quad B: duck, goose \quad C: car};
-% Vertical plots share a probability scale; only the two competitors are shown.
-\node[tinylabel] at (7.43,2.63) {Before: softmax$(\ell)$};
-\node[tinylabel] at (10.72,2.63) {After: softmax$(\hat\ell)$};
-\draw[black!40,line width=.3pt] (6.63,.92) -- (8.23,.92);
-\fill[it!75] (6.779999999999999,.92) rectangle (7.18,1.7096);
-\node[tinylabel,above] at (6.9799999999999995,1.7096) {0.44};
-\node[tinylabel,below] at (6.9799999999999995,.89) {duck};
-\fill[io!75] (7.68,.92) rectangle (8.08,1.7926);
-\node[tinylabel,above] at (7.88,1.7926) {0.48};
-\node[tinylabel,below] at (7.88,.89) {goose};
-\draw[black!40,line width=.3pt] (9.92,.92) -- (11.520000000000001,.92);
-\fill[it!75] (10.070000000000002,.92) rectangle (10.47,2.1437);
-\node[tinylabel,above] at (10.270000000000001,2.1437) {0.68};
-\node[tinylabel,below] at (10.270000000000001,.89) {duck};
-\fill[io!75] (10.970000000000002,.92) rectangle (11.370000000000001,1.3364);
-\node[tinylabel,above] at (11.170000000000002,1.3364) {0.23};
-\node[tinylabel,below] at (11.170000000000002,.89) {goose};
-
-\draw[arr,draw=ir,line width=.9pt] (8.60,1.56) -- (9.58,1.56);
-\node[tinylabel,text=ir] at (9.10,1.96) {+ RP};
-\node[tinylabel,text=ir] at (9.10,1.13) {$\beta_i=0.475$};
-\node[tinylabel] at (9.21,.38) {Two classes shown; fusion uses all four.};
-\node[tinylabel,text=black!65,anchor=east] at (12.1,.05) {Illustrative values, not experimental results};
 \end{tikzpicture}
-\caption{Illustrated two-stage fusion. (a) Repeated thumbnails denote the same
-input. Initial adapted logits $r$, not bare TII scores $u$, enter $F_R$;
-one fixed RP branch supplies $s$ to both fusion stages. (b) Task-wise fitting
-retains cumulative statistics, not images. (c--d) A four-class toy example
-shows a changed task proposal and class prediction; both use the same $s$.
-Bars in (c) are standardised task scores; (d) shows two class probabilities
-before and after gated fusion, computed over all four classes.
-These are illustrations, not experimental results or guaranteed repairs.
-Photo: T.~G.~Barnes/USFWS (public domain).}
+\caption{The two-stage pipeline. (a) Repeated thumbnails denote the same
+input. Initial adapted logits $r$, not bare TII scores $u$, enter $F_R$; one
+fixed RP branch supplies $s$ to both fusion stages. (b) Task-wise fitting keeps
+cumulative statistics, not images. Photo: T.~G.~Barnes/USFWS (public domain).}
 \label{fig:pipeline}
 \end{figure}
 
@@ -564,23 +488,19 @@ inverting it. The map takes $768$ input features through $10^4$ nonlinear
 features to $|\mathcal Y|$ class scores.
 
 \subsubsection{Two inherited properties.}
-Both $G$ and $C$ in (\ref{eq:gram}) are \emph{sums} over samples, and addition
-commutes, so for a \emph{fixed} feature map the accumulated statistics, and with
-them $W_{\mathrm{out}}$, do not depend on the order in which the samples
-arrived. Nothing an earlier task contributed is overwritten or decayed: the head
-after $T$ tasks is the ridge solution of a joint fit over every feature seen so
-far, and it reaches that solution having visited each task once.
+Both $G$ and $C$ in (\ref{eq:gram}) are \emph{sums} over samples, so for a
+\emph{fixed} feature map they, and with them $W_{\mathrm{out}}$, do not depend
+on the order in which samples arrived: nothing an earlier task contributed is
+overwritten, and the head after $T$ tasks equals the ridge solution of a joint
+fit over every feature seen. Their sizes do not grow with the number of samples
+and no per-sample feature is retained, so the exemplar-free protocol follows
+from the structure of the computation.
 
-This is weaker than an absence of forgetting and we claim no more than it says.
-Adding a task adds classes that compete for the same arg max, so accuracy on old
-classes can fall while their statistics sit untouched. Nor is the feature map
-fixed across orderings: features come from the first task's adapter, so a
-different task order yields a different extractor and a different $G$. The
-property rules out one mechanism of forgetting --- the overwriting of old
-evidence --- not the phenomenon. At the same time the sizes of the two matrices
-do not depend on how many samples have been seen, and no per-sample feature is
-ever retained, so the exemplar-free protocol is preserved by the structure of
-the computation itself.
+This is weaker than an absence of forgetting and we claim no more. Adding a task
+adds classes competing for the same arg max, so accuracy on old classes can fall
+while their statistics sit untouched; and the feature map is not fixed across
+orderings, since features come from the first task's adapter. The property rules
+out one mechanism of forgetting, not the phenomenon.
 
 \subsection{Two-Stage Fusion}
 
@@ -625,25 +545,22 @@ full baseline additionally requires $\beta=0$.
 
 \subsubsection{Second stage: gated fusion at the classification level.}
 Because $\ell$ comes from the shared head, it frequently predicts the correct
-class in spite of a wrong routing decision. We therefore use the
-random-projection head itself as a secondary classifier, this time taking its
-class scores $s$.
-
-A fixed blend can alter a confident primary prediction. We instead reduce
-the RP share as the top-two probability margin grows, recognising that
-confident predictions can still be wrong:
+class in spite of a wrong routing decision, so we use the projection head itself
+as a secondary classifier, this time taking its class scores $s$. A fixed blend
+would alter confident primary predictions; we instead reduce the RP share as the
+top-two probability margin grows, while recognising that confident predictions
+can still be wrong:
 \begin{equation}
 \beta_i = \beta \left( 1 - \frac{p_{(1)} - p_{(2)}}{p_{(1)} + p_{(2)}} \right),
 \qquad \beta = 0.5 ,
 \label{eq:gate}
 \end{equation}
 where $p_{(1)} \geq p_{(2)}$ are the two largest probabilities of
-$\mathrm{softmax}(\ell)$ over the classes seen so far. Dividing by the sum makes
-the quantity depend only on the ratio $p_{(2)}/p_{(1)}$, that is, it measures how
-threatened the top class is, independently of how much probability mass the pair
-holds. The RP share approaches zero as the top class dominates and reaches
-$\beta$ when the top two probabilities are equal; this is a continuous weight,
-not a binary confidence test.
+$\mathrm{softmax}(\ell)$ over the classes seen so far. Dividing by the sum leaves
+the ratio $p_{(2)}/p_{(1)}$, so the gate measures how threatened the top class is
+rather than how much mass the pair holds. The RP share falls to zero as the top
+class dominates and reaches $\beta$ when the two are equal: a continuous weight,
+not a binary test.
 
 The blend reuses (\ref{eq:znorm}) and then maps the result back onto the scale of
 $\ell$:
@@ -689,12 +606,11 @@ Split-CUB-200 in $10$ tasks each; the grid of Sect.~\ref{sec:grid} replaces
 CUB-200 with Split-ImageNet-A and 5-Datasets, the latter a $5$-task sequence.
 The five pre-training settings are Sup-21K, MoCo-v3, iBOT-1K, iBOT-21K and DINO.
 Seeds are $42$ to $45$, with the LoRA pool and the TII module retrained from
-scratch for each. Baseline and proposed method are evaluated from the same
-checkpoints through the same code path, avoiding differences due to separate
-training runs within each seed. The projection head uses $M = 10^4$ dimensions,
-a ReLU nonlinearity and $\lambda = 10^4$; no temperature scaling is applied.
-Fusion starts at task 1. We preserve the baseline CRM settings
-(\texttt{En=gen}, threshold $-10$, and two class-derived candidate tasks).
+scratch for each; baseline and proposed method are then evaluated from the same
+checkpoints through the same code path. The projection head uses $M = 10^4$, a
+ReLU nonlinearity and $\lambda = 10^4$, with no temperature scaling; fusion
+starts at task 1; the baseline CRM settings are preserved (\texttt{En=gen},
+threshold $-10$, two class-derived candidate tasks).
 
 Acc@task in the released evaluator measures the DRM task proposal. In the
 default class-based routing path, CRM can change the output logits without
@@ -716,22 +632,20 @@ is better for the other metrics.
 
 \subsubsection{Sanity check.}
 $w = 1.0$ in (\ref{eq:route}) restores the original DRM proposal and
-$\beta = 0$ in (\ref{eq:mix}) leaves $\hat{\ell} = \ell$ element-wise. Both are
-needed, each governing one stage. With the pair set the method reproduces the
-HRM-PET baseline digit for digit on all three datasets --- $77.7914$,
-$74.0191$, $1.2305$, the rest agreeing to the fourth decimal --- so every
-difference in Table~\ref{tab:main} comes from the added components and not from
-the evaluation path. Each of $w$ and $\beta$ doubles as a continuous ablation
-axis for its own stage.
+$\beta = 0$ in (\ref{eq:mix}) leaves $\hat{\ell} = \ell$; both are needed, each
+governing one stage. With the pair set the method reproduces the HRM-PET
+baseline digit for digit on all three datasets --- $77.7914$, $74.0191$,
+$1.2305$, the rest agreeing to the fourth decimal --- so every difference in
+Table~\ref{tab:main} comes from the added components, not the evaluation path.
+Each weight doubles as a continuous ablation axis for its own stage.
 
 \subsection{Main Results}
 \label{sec:results}
 
-Table~\ref{tab:main} reports all three datasets. Values are the mean $\pm$
-standard deviation over four seeds. The change column is computed pairwise ---
-the difference between proposed and baseline is taken per seed and only then
-averaged --- so its standard deviation describes the stability of the
-improvement itself rather than the varying difficulty of the seeds.
+Table~\ref{tab:main} reports all three datasets as mean $\pm$ standard deviation
+over four seeds. The change column is pairwise --- the difference is taken per
+seed and only then averaged --- so its standard deviation describes the
+stability of the improvement rather than the difficulty of the seeds.
 
 \begin{table}
 \small
@@ -845,24 +759,15 @@ baseline in Table~\ref{tab:main}.
 \subsection{The Full Grid}
 \label{sec:grid}
 
-Everything above rests on one backbone. The original work covers four datasets
-by five pre-training configurations --- twenty cells, identified from traces in
-its released code --- and we rebuilt every one, evaluating both methods through
-one code path at seed $42$. \emph{Every cell} improves on both accuracy axes:
-Acc@task by $+0.97$ to $+4.57$ and Acc@1 by $+0.59$ to $+3.58$, against
-baselines spanning $31.8$ to $93.8$ Acc@1. Read as relative error reduction the
-effect is largest where the baseline is strongest, up to $27.8\%$ on
-5-Datasets.
-
-Retention over those twenty cells behaves in a way the summary metric hides.
-Backward averages $a_{i,T} - a_{i,i}$, final accuracy minus the accuracy each
-task reached when it was learned. It therefore depends on both quantities.
-Both halves rise here: final accuracy on earlier tasks improves in \emph{every
-one} of the twenty cells, by $+1.83$ on average, while accuracy at learning time
-improves by $+1.58$. Backward is the small residue of two larger movements, and
-in the five cells where Backward worsens, the gain at learning time exceeds
-the gain in final old-task accuracy. This explains the change but does not
-establish an absence of forgetting.
+The original work covers four datasets by five pre-training configurations, and
+we rebuilt all twenty cells, evaluating both methods through one code path at
+seed $42$. Every cell improves on both accuracy axes: Acc@task by $+0.97$ to
+$+4.57$ and Acc@1 by $+0.59$ to $+3.58$, against baselines spanning $31.8$ to
+$93.8$ Acc@1. Retention over the same cells is descriptive rather than
+conclusive: final accuracy on earlier tasks rises in every one of the twenty,
+by $+1.83$ on average, while accuracy at learning time rises by $+1.58$, so
+Backward, their difference, stays small and worsens in five cells that learned
+more rather than forgot more.
 
 \subsection{Ablation}
 \label{sec:ablation}
@@ -874,17 +779,17 @@ values, since only the differences carry the argument.
 
 \subsubsection{Routing gains depend on the gate.}
 Each stage alone beats the baseline on every backbone --- routing by $+0.29$ to
-$+0.74$, the classifier by $+0.51$ to $+3.07$ --- and they are far from additive.
-With the gate off, adding routing to class fusion moves Acc@1 by only
-$-0.07$ to $+0.02$. This near-zero net effect does not establish identical
-predictions or repairs: improvements and newly introduced errors may cancel.
-A prediction-level transition audit would be needed to distinguish these cases.
+$+0.74$, the classifier by $+0.51$ to $+3.07$ --- yet they are far from additive.
+With the gate off, adding routing to class fusion moves Acc@1 by only $-0.07$ to
+$+0.02$; a near-zero net effect does not establish identical predictions, since
+repairs and new errors may cancel, and separating them needs a prediction-level
+audit.
 
-With the gate on, routing adds $+0.13$ to $+0.77$ and is positive on all five
-backbones. The gate itself changes Acc@1 by $-1.32$ to $+0.85$ with class-only
-fusion, compared with $-0.54$ to $+0.96$ when routing is present. This shows an
-interaction. Re-matching may change the confidence on which the gate acts, but
-aggregate accuracies do not identify which predictions are repaired or harmed.
+With the gate on, routing adds $+0.13$ to $+0.77$, positive on all five
+backbones, while the gate changes Acc@1 by $-1.32$ to $+0.85$ with class-only
+fusion against $-0.54$ to $+0.96$ when routing is present. This is an
+interaction: re-matching may change the confidence the gate acts on, though
+aggregate accuracies again do not say which predictions move.
 
 A single seed cannot settle a difference of a few tenths, so
 Table~\ref{tab:classonly} repeats the comparison that matters --- the full
