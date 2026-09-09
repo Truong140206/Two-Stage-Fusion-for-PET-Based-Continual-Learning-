@@ -66,8 +66,10 @@ tham số nhẹ, mỗi tác vụ một bộ, và khi suy luận phải chọn b�
 xương sống trước khi phân lớp. Lựa chọn đó sinh ra từ một nguồn tín hiệu duy
 nhất, nên toàn bộ chất lượng phía sau bị chặn bởi chất lượng của một khối. Chúng
 tôi chỉ ra rằng một nguồn tín hiệu thứ hai đã nằm sẵn trong chính mô hình đã huấn
-luyện, và khai thác được mà không cần huấn luyện thêm tham số nào: một đầu phân
-lớp bậc hai dựng trên phép chiếu ngẫu nhiên đóng băng của đặc trưng LoRA có sẵn.
+luyện, và đọc ra được mà không cần bất kỳ bước huấn luyện bằng gradient nào: một
+đầu phân lớp bậc hai dựng trên phép chiếu ngẫu nhiên đóng băng của đặc trưng LoRA
+có sẵn, với trọng số là nghiệm ridge dạng đóng của thống kê được cộng dồn lần
+lượt theo từng tác vụ.
 Nguồn này được hợp nhất ở hai vị trí, cả hai đặt ở giai đoạn suy luận. Tầng thứ
 nhất trộn nó với tín hiệu định tuyến gốc sau khi chuẩn hóa hai nguồn về cùng
 thang đo. Tầng thứ hai dùng chính nó làm bộ phân lớp thứ hai, với trọng số theo
@@ -100,9 +102,13 @@ một tín hiệu duy nhất đứng chắn trước phần còn lại của đ�
 Chúng tôi nhận thấy một nguồn bằng chứng thứ hai, độc lập, vốn đã nằm sẵn trong
 chính mô hình đã huấn luyện và đang bị bỏ đi. Đặc trưng LoRA mà đường ống dù sao
 cũng phải tính có thể được đẩy qua một phép chiếu ngẫu nhiên cố định rồi đọc bằng
-một bộ phân lớp ridge dạng đóng dựng từ thống kê bậc hai. Đầu này không huấn
-luyện tham số nào, không lưu ảnh nào, và tốn đúng một lượt truyền xuôi mà đường
-ống đã thực hiện sẵn. Quan trọng hơn, nó sai trên \emph{những mẫu khác} với khối
+một bộ phân lớp ridge dạng đóng dựng từ thống kê bậc hai. Trọng số đầu ra của nó
+\emph{có} được ước lượng --- giải một bài toán bình phương tối thiểu có giám sát
+vẫn là học, bất kể dùng bộ giải nào --- nhưng bằng nghiệm dạng đóng chứ không
+phải hạ gradient, từ các tổng cộng dồn chứ không phải từ mẫu được lưu, và không
+đụng tới mạng xương sống, bộ điều hợp hay vòng huấn luyện. Đầu này không giữ ảnh
+nào và không giữ đặc trưng của từng mẫu, và thêm một lượt truyền xuôi qua bộ điều
+hợp trên mỗi mẫu lúc suy luận. Quan trọng hơn, nó sai trên \emph{những mẫu khác} với khối
 định tuyến --- chính tính chất ấy khiến việc kết hợp hai nguồn có ý nghĩa thay vì
 thừa thãi.
 
@@ -119,7 +125,7 @@ cho phép trộn chỉ mở ra ở những mẫu mà bộ phân lớp chính cò
       nhất, và một đường định tuyến tốt hơn không tự động thành một dự đoán tốt
       hơn, vì đầu phân lớp dùng chung thường đã đoán đúng lớp bất chấp định tuyến
       sai (Mục~\ref{sec:method}).
-\item Chúng tôi cho thấy một đầu bậc hai không huấn luyện, đặt trên phép chiếu
+\item Chúng tôi cho thấy một đầu bậc hai không cần huấn luyện bằng gradient, đặt trên phép chiếu
       ngẫu nhiên đóng băng của chính những đặc trưng sẵn có, cung cấp một nguồn
       bằng chứng thứ hai có sai số không tương quan với nguồn thứ nhất, và hợp
       nhất hai nguồn ở cả cấp định tuyến lẫn cấp phân lớp, hoàn toàn ở giai đoạn
@@ -161,6 +167,8 @@ khi phân lớp, và toàn bộ chất lượng phía sau phụ thuộc vào l�
 đó. Bảng~\ref{tab:notation} tổng hợp ký hiệu dùng trong bài.
 
 \begin{table}
+\small
+\setlength{\tabcolsep}{4.5pt}
 \caption{Ký hiệu dùng trong bài.}\label{tab:notation}
 \begin{tabular}{ll}
 \hline
@@ -174,7 +182,8 @@ $q(x)$ & đặc trưng truy vấn từ mạng xương sống trần\\
 $\hat{d}(x)$, $\tilde{d}(x)$ & phân bố theo lớp của TII; của đầu phân lớp sau định tuyến\\
 $\mathcal{T}(\cdot)$ & ánh xạ lớp sang định danh tác vụ\\
 $\hat{t}_f$, $\hat{t}_s$ & định danh tác vụ ở đối sánh đầu và sau khi đối sánh lại\\
-$\ell \in \mathbb{R}^{|\mathcal{Y}|}$ & điểm số theo lớp của đầu phân lớp đã định tuyến\\
+$u \in \mathbb{R}^{|\mathcal{Y}|}$ & điểm số theo lớp của bộ phân lớp phụ của TII; đầu vào tầng một\\
+$\ell \in \mathbb{R}^{|\mathcal{Y}|}$ & điểm số theo lớp của đầu phân lớp đã định tuyến; đầu vào tầng hai\\
 $s \in \mathbb{R}^{|\mathcal{Y}|}$ & điểm số theo lớp của đầu chiếu ngẫu nhiên\\
 $z(\cdot)$ & chuẩn hóa về trung bình không, phương sai đơn vị trên từng mẫu\\
 \hline
@@ -273,6 +282,8 @@ chúng --- tỉ lệ mẫu mà ít nhất một trong hai định tuyến đúng
 cách kết hợp hai nguồn có thể đạt tới.
 
 \begin{table}
+\small
+\setlength{\tabcolsep}{4.5pt}
 \caption{Độ chính xác định tuyến (\%), seed 42. Hàng cuối là tỉ lệ mẫu mà ít
 nhất một trong hai bộ định tuyến cho kết quả đúng, tức trần khả dụng khi kết hợp
 hai nguồn.}\label{tab:routing}
@@ -289,8 +300,11 @@ Hợp của TII và đầu RP  & \textbf{82.99} & \textbf{92.86} & \textbf{96.26
 \end{tabular}
 \end{table}
 
-Hai bộ định tuyến sai trên \emph{những tập mẫu khác nhau}: trên ImageNet-R, đầu
-RP định tuyến đúng $19{,}2\%$ số mẫu mà TII định tuyến sai. Tính bổ trợ ấy là
+Hai bộ định tuyến sai trên \emph{những tập mẫu khác nhau}. Trên ImageNet-R, hợp
+của hai nguồn vượt TII $19{,}19$ điểm tính trên toàn tập kiểm tra; mà TII sai
+trên $36{,}20\%$ tập đó, nên số điểm ấy tương ứng $53{,}0\%$ lỗi của TII được đầu
+chiếu ngẫu nhiên sửa. Con số tương ứng là $62{,}0\%$ trên CIFAR-100 và $46{,}9\%$
+trên CUB-200. Tính bổ trợ ấy là
 điều kiện cần để việc hợp nhất có ý nghĩa --- nếu hai nguồn cùng sai trên một tập
 mẫu thì hợp của chúng không thể vượt nguồn mạnh hơn, mà ở đây nó vượt cả hai hơn
 năm điểm.
@@ -307,6 +321,8 @@ Nhưng đầu RP không chỉ là một bộ định tuyến: nó là một bộ
 tầng định tuyến đã bỏ qua. Bảng~\ref{tab:cls} đo mức bổ trợ ở cấp đó.
 
 \begin{table}
+\small
+\setlength{\tabcolsep}{4.5pt}
 \caption{Tính bổ trợ ở cấp phân lớp (\%), seed 42. Cột cuối là tỉ lệ mẫu mà đầu
 sau định tuyến cho kết quả sai còn đầu RP cho kết quả đúng.}\label{tab:cls}
 \begin{tabular}{lrrrr}
@@ -383,8 +399,10 @@ truyền xuôi.
 \label{sec:method}
 
 Chúng tôi bổ sung một nguồn tín hiệu thứ hai và hai vị trí để hợp nhất nó vào,
-ứng với hai điểm yếu nêu trên. Cả hai đặt ở giai đoạn suy luận: không tham số nào
-được huấn luyện thêm và không mô hình nào phải huấn luyện lại.
+ứng với hai điểm yếu nêu trên. Cả hai phép hợp nhất diễn ra lúc suy luận: không
+tham số nào được cập nhật bằng gradient và không mô hình nào phải huấn luyện lại.
+Riêng đầu chiếu ngẫu nhiên thì trọng số của nó được ước lượng bằng nghiệm dạng
+đóng, cập nhật một lần sau mỗi tác vụ.
 Hình~\ref{fig:pipeline} minh họa vị trí của chúng.
 
 % [!ht] thay cho \begin{figure} tran nhu mau: cau nhac toi hinh nay la cau cuoi
@@ -496,9 +514,19 @@ quan rất mạnh, và $(G + \lambda I)^{-1}$ khử tương quan đó.
 
 \subsubsection{Hai tính chất kế thừa.}
 Cả $G$ lẫn $C$ ở (\ref{eq:gram}) đều là \emph{tổng} trên các mẫu, và phép cộng có
-tính giao hoán. Do đó $W_{\mathrm{out}}$ không phụ thuộc thứ tự các tác vụ được
-học: đầu phân lớp này không quên theo đúng nghĩa cấu trúc, chứ không nhờ một cơ
-chế chống quên nào được thêm vào. Đồng thời, kích thước hai ma trận không phụ
+tính giao hoán, nên với một ánh xạ đặc trưng \emph{cố định}, thống kê cộng dồn ---
+và cùng với chúng là $W_{\mathrm{out}}$ --- không phụ thuộc thứ tự các mẫu đi qua.
+Không phần đóng góp nào của tác vụ cũ bị ghi đè hay suy giảm: sau $T$ tác vụ, đầu
+phân lớp đúng bằng nghiệm ridge của một phép khớp chung trên mọi đặc trưng đã
+gặp, đạt tới đó mà chỉ ghé qua mỗi tác vụ một lần.
+
+Điều này yếu hơn việc không quên, và chúng tôi không khẳng định quá những gì nó
+nói. Thêm một tác vụ là thêm những lớp cùng tranh chấp một phép arg max, nên độ
+chính xác trên lớp cũ vẫn có thể giảm dù thống kê của chúng còn nguyên. Ánh xạ
+đặc trưng cũng không cố định khi đổi thứ tự: đặc trưng lấy từ bộ điều hợp của tác
+vụ đầu tiên, nên một thứ tự khác cho một bộ trích xuất khác và một $G$ khác. Tính
+chất này loại trừ \emph{một cơ chế} gây quên --- việc ghi đè bằng chứng cũ --- chứ
+không loại trừ hiện tượng quên. Đồng thời, kích thước hai ma trận không phụ
 thuộc số mẫu đã gặp, và đặc trưng của từng mẫu không bao giờ được giữ lại, nên
 giao thức không lưu mẫu được bảo toàn bởi cấu trúc phép tính.
 
@@ -515,30 +543,45 @@ z(v) = \frac{v - \mathrm{mean}(v)}{\mathrm{std}(v)} ,
 với trung bình và độ lệch chuẩn tính riêng cho từng mẫu, chỉ trên các lớp đã gặp.
 
 \subsubsection{Tầng thứ nhất: hợp nhất ở cấp định tuyến.}
-Cả hai nguồn đều sinh điểm số theo \emph{lớp}, trong khi định tuyến cần điểm số
+Tầng này chạy \emph{trước} khi gắn bất kỳ bộ thích ứng nào, nên $\ell$ ở
+(\ref{eq:logits}) chưa tồn tại; thứ nó thay thế là bước đối sánh đầu tiên, và
+điểm số nó dùng là của chính TII. Ký hiệu
+$u \in \mathbb{R}^{|\mathcal{Y}|}$ là điểm số theo lớp của bộ phân lớp phụ trong
+(\ref{eq:tii}), lấy trước khi chuẩn hóa. Cả $u$ lẫn $s$ của đầu chiếu ngẫu nhiên
+đều cho điểm theo \emph{lớp}, trong khi định tuyến cần điểm số
 theo \emph{tác vụ}. Chúng tôi quy đổi bằng giá trị lớn nhất trên tập lớp của mỗi
 tác vụ, vì một tác vụ đáng được chọn khi \emph{một} lớp nào đó của nó có điểm
 cao, không phải khi trung bình các lớp của nó cao:
 \begin{equation}
-\ell^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} \ell_c ,
+u^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} u_c ,
 \qquad
 s^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} s_c ,
 \qquad t = 1,\dots,\hat{T},
 \label{eq:taskscore}
 \end{equation}
-với $\hat{T}$ là số tác vụ đã gặp. Hai véc-tơ được trộn sau khi chuẩn hóa:
+với $\hat{T}$ là số tác vụ đã gặp; lớp của các tác vụ chưa gặp không bao giờ đi
+vào hai phép lấy lớn nhất này. Hai véc-tơ được trộn sau khi chuẩn hóa:
 \begin{equation}
-\mathrm{fused} = w\, z(\ell^{\mathrm{task}}) + (1-w)\, z(s^{\mathrm{task}}),
+\mathrm{fused} = w\, z(u^{\mathrm{task}}) + (1-w)\, z(s^{\mathrm{task}}),
 \qquad
 \hat{t}_f = \arg\max_t\, \mathrm{fused}_t ,
 \qquad w = 0.7 .
 \label{eq:route}
 \end{equation}
+Hai chi tiết của $z(\cdot)$ cần thiết để tái lập. Nó chia cho độ lệch chuẩn
+\emph{tổng thể} chứ không phải ước lượng hiệu chỉnh Bessel, và chặn dưới mẫu số
+ở $10^{-6}$. Tại giai đoạn đầu $\hat{T}=1$, nên ước lượng hiệu chỉnh chia cho
+$\hat{T}-1=0$ và trả về NaN, thứ mà không phép chặn dưới nào sửa được; ước lượng
+tổng thể trả về $0$, và phép chặn dưới sửa được. Với mọi giai đoạn sau, hai cách
+chỉ khác nhau một hệ số $\sqrt{\hat{T}/(\hat{T}-1)}$ chung cho cả hai nguồn, nên
+nó triệt tiêu trong arg max và không làm dịch chuyển con số nào được báo cáo.
 Định danh $\hat{t}_f$ thay đầu ra của (\ref{eq:tii}) và được trao cho DRM và CRM
 như một điểm khởi đầu tốt hơn. Chúng tôi thay \emph{đúng một} khối là bước đối
 sánh đầu tiên; mọi cơ chế phía sau giữ nguyên. Tại $w = 1.0$ thì
-(\ref{eq:route}) trả về đúng thứ tự của $\ell^{\mathrm{task}}$, nên phương pháp
-thu về đúng phương pháp cơ sở.
+(\ref{eq:route}) trả về đúng thứ tự của $u^{\mathrm{task}}$, nên \emph{riêng tầng
+này} thu về đúng bước đối sánh đầu tiên của phương pháp cơ sở. Chỉ mình nó chưa
+đủ để trở về phương pháp cơ sở: tầng thứ hai do trọng số $\beta$ của riêng nó
+điều khiển, muốn vậy phải có đồng thời $w=1.0$ và $\beta=0$.
 
 \subsubsection{Tầng thứ hai: hợp nhất ở cấp phân lớp với cơ chế cổng.}
 Vì $\ell$ đến từ đầu phân lớp dùng chung, nó thường đã đoán đúng lớp bất chấp
@@ -569,8 +612,19 @@ m_i &= (1 - \beta_i)\, z(\ell_i) + \beta_i\, z(s_i),
 \label{eq:affine}
 \end{align}
 Bước đưa về ở (\ref{eq:affine}) là phép affine theo từng mẫu với hệ số dương nên
-thứ hạng không đổi; nó chỉ cần cho hàm mất mát, vì chuẩn hóa đặt hỗn hợp ở phương
-sai đơn vị, một thang đo sai cho entropy chéo. Tại $\beta = 0$ thì
+thứ hạng không đổi; nó chỉ cần cho hàm mất mát, vì hỗn hợp không còn nằm trên
+thang của $\ell$, vốn là thang đo sai cho entropy chéo. Nó cũng không nằm trên
+thang đơn vị. Với hai véc-tơ đã chuẩn hóa,
+\begin{equation}
+\mathrm{Var}\big((1-\beta) z_1 + \beta z_2\big)
+  = (1-\beta)^2 + \beta^2 + 2\beta(1-\beta)\rho ,
+\label{eq:mixvar}
+\end{equation}
+với $\rho$ là tương quan giữa chúng trên chiều lớp; giá trị này bằng một chỉ khi
+$\rho = 1$, còn tại $\beta = 0.5$ với hai nguồn không tương quan thì nó bằng
+$0.5$. Vậy bước đưa về chỉ trả điểm số về một thang tham chiếu. Nó không phải
+một bảo đảm về phương sai, cũng không phải một lập luận về hiệu chỉnh xác suất,
+và chúng tôi không đưa ra khẳng định nào về hiệu chỉnh. Tại $\beta = 0$ thì
 $\hat{\ell} = \ell$ đúng từng phần tử, nên tầng này cũng thu về đúng phương pháp cơ
 sở.
 
@@ -596,12 +650,21 @@ Ký hiệu $a_{i,t}$ là độ chính xác trên tác vụ $i$ đo tại giai đ
 báo cáo độ chính xác định tuyến (Acc@task), độ chính xác phân lớp ở hạng một và
 hạng năm (Acc@1, Acc@5), hàm mất mát cross-entropy (Loss), và hai chỉ số ghi nhớ
 \begin{equation}
-\mathrm{Forgetting} = \frac{1}{T}\sum_{i=1}^{T}
-\Big( \max_{t} a_{i,t} - a_{i,T} \Big),
+\mathrm{Forgetting} = \frac{1}{T-1}\sum_{i=1}^{T-1}
+\Big( \max_{1 \le t \le T} a_{i,t} - a_{i,T} \Big),
 \qquad
-\mathrm{Backward} = \frac{1}{T}\sum_{i=1}^{T} \big( a_{i,T} - a_{i,i} \big).
+\mathrm{Backward} = \frac{1}{T-1}\sum_{i=1}^{T-1} \big( a_{i,T} - a_{i,i} \big).
 \label{eq:metrics}
 \end{equation}
+Cả hai trung bình đều lấy trên $T-1$ tác vụ đứng trước tác vụ cuối. Tác vụ cuối
+bị loại vì nó đóng góp một số hạng bằng không vào cả hai tổng: nó chỉ được đánh
+giá tại đúng một giai đoạn, nên giá trị lớn nhất và độ chính xác cuối của nó là
+cùng một ô. Nếu tính cả nó thì tử số không đổi mà mẫu số thành $T$ thay vì
+$T-1$, khiến mọi chỉ số ghi nhớ bị báo thấp đi một hệ số $(T-1)/T$ --- với các
+bộ dữ liệu mười tác vụ ở đây là thấp đi $10\%$. Giá trị lớn nhất lấy trên các
+giai đoạn mà tác vụ $i$ thực sự được đánh giá, tức $t \ge i$; phần tam giác dưới
+chưa đánh giá của ma trận độ chính xác không bao giờ đi vào hai chỉ số này.
+
 Với Loss và Forgetting, thấp hơn là tốt hơn; với bốn chỉ số còn lại thì ngược
 lại. Cả hai chỉ số ghi nhớ đều so một tác vụ với \emph{chính nó} ở thời điểm
 trước, chứ không so giữa các phương pháp --- đặc điểm khiến chúng hành xử khác
@@ -626,6 +689,8 @@ nên độ lệch chuẩn của cột đó mô tả độ ổn định của ch�
 ảnh hưởng bởi độ khó khác nhau giữa các seed.
 
 \begin{table}
+\small
+\setlength{\tabcolsep}{4.5pt}
 \caption{Kết quả trên ba bộ dữ liệu, trung bình $\pm$ độ lệch chuẩn trên bốn
 seed 42--45.}\label{tab:main}
 \begin{tabular}{llrrr}
@@ -702,6 +767,8 @@ mạng. Chúng tôi dựng lại cả hai mươi ô, huấn luyện lại trọn
 đường mã và đúng một seed.
 
 \begin{table}
+\small
+\setlength{\tabcolsep}{4.5pt}
 \caption{Lưới đầy đủ: bốn bộ dữ liệu nhân năm cấu hình tiền huấn luyện của bài
 gốc. Acc@1 ở seed 42; HRM-PET là $w=1$, $\beta=0$ còn Đề xuất là $w=0{,}7$,
 $\beta=0{,}5$. Giảm lỗi là mức giảm sai số tương đối so với hàng HRM-PET.}
@@ -756,6 +823,8 @@ hàng trên, đo trên ImageNet-R với các cấu hình tiền huấn luyện l
 Bảng~\ref{tab:cumul} dựng lại đúng hình dạng ấy cho hai tầng của chúng tôi.
 
 \begin{table}
+\small
+\setlength{\tabcolsep}{4.5pt}
 \caption{Khảo sát trên Split-ImageNet-R, seed 42, Acc@1, theo hình dạng cộng dồn
 mà bài gốc dùng. Hàng ba và hàng bốn chỉ khác nhau ở chỗ tầng định tuyến có bật
 hay không, và đó là chỗ bộc lộ tương tác giữa hai tầng. Khác với bảng tương ứng
@@ -811,6 +880,8 @@ cổng và ít nhất $3{,}89$ khi không. Thứ hai, ở $\beta$ tốt nhất c
 còn lại thua $0{,}09$ điểm.
 
 \begin{table}
+\small
+\setlength{\tabcolsep}{4.5pt}
 \caption{Chênh lệch Acc@1 khi bỏ cổng và hạ $\beta$ xuống $0{,}3$, so với cấu
 hình đã công bố (có cổng, $\beta = 0{,}5$). Dấu dương nghĩa là \emph{bỏ cổng tốt
 hơn}. Seed 42.}\label{tab:gate-cross}
