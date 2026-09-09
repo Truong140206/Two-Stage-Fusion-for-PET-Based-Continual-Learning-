@@ -23,7 +23,22 @@
 % The pipeline figure is drawn in TikZ, i.e. vector graphics, as the sample
 % recommends for diagrams and schematics.
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta, positioning}
+\usetikzlibrary{arrows.meta, positioning, calc, fit, backgrounds}
+% Colour carries meaning in Fig. 1 and is used for nothing else: green for the
+% frozen backbone, blue for a trained classifier, orange for the LoRA pool,
+% purple for the random projection, and red for the two blocks this paper adds.
+\definecolor{cfroz}{RGB}{198,224,180}
+\definecolor{cmlp} {RGB}{189,215,238}
+\definecolor{cpool}{RGB}{248,203,173}
+\definecolor{crp}  {RGB}{214,196,232}
+\definecolor{cours}{RGB}{192,0,0}
+\definecolor{cpanel}{RGB}{240,246,252}
+% A padlock, drawn rather than taken from a symbol font, so it needs no package
+% and scales with the surrounding text. It marks the blocks that stay frozen.
+\newcommand{\lk}{\tikz[baseline=-0.45ex]{
+  \draw[line width=0.3pt, black!75] (0,0.85mm) arc (180:0:0.5mm);
+  \fill[black!75, rounded corners=0.2mm]
+       (-0.85mm,-0.85mm) rectangle (0.85mm,0.85mm);}}
 %
 \begin{document}
 %
@@ -358,59 +373,99 @@ no model is retrained. Figure~\ref{fig:pipeline} shows where they go.
 % directly under it. The default tbp lets it drift pages away from its mention.
 \begin{figure}[!ht]
 \centering
-\resizebox{\textwidth}{!}{%
+% No \resizebox: the picture is laid out to fit \textwidth at its natural size,
+% so the labels keep the body font. The previous version was wider than the
+% column and was scaled down, which is why its text came out below \tiny.
 \begin{tikzpicture}[
-  font=\footnotesize,
-  >={Stealth[length=2mm]},
-  box/.style={draw, minimum height=8mm, minimum width=1.6cm, inner xsep=4pt, align=center},
-  hl/.style={box, very thick, fill=black!6}
+  font=\scriptsize,
+  >={Stealth[length=1.5mm]},
+  blk/.style={draw=black!55, rounded corners=1.5pt, minimum height=6.5mm,
+              inner xsep=2.5pt, align=center, font=\scriptsize},
+  froz/.style={blk, fill=cfroz},
+  mlp/.style={blk, fill=cmlp},
+  pool/.style={blk, fill=cpool},
+  rph/.style={blk, fill=crp},
+  io/.style={blk, fill=black!5, draw=black!70},
+  ours/.style={blk, draw=cours, line width=0.9pt, fill=cours!7,
+               minimum height=8mm},
+  lab/.style={font=\scriptsize\itshape, text=black!55, inner sep=1pt},
+  tag/.style={font=\tiny, text=black!70, inner sep=1.2pt, fill=white}
 ]
-% Each box is chained off the previous one's east edge, so what is specified is
-% the GAP and the width is free to be whatever the label needs. Fixed centre
-% coordinates cannot work here: box width depends on label length, so longer
-% words silently eat the gap. With the old centres the LoRA-to-DRM gap fell to
-% 1.49pt against a 2mm (5.69pt) arrow tip, i.e. the arrowhead was drawn inside
-% the neighbouring box. 9mm keeps every gap at 25.61pt in both languages.
-\node[box] (in) at (0, 0) {Input image};
-\coordinate (up) at (0, 0.85);
-\coordinate (dn) at (0,-0.85);
-\coordinate (r1) at ([xshift=9mm]in.east);
-\node[box, anchor=west] (tii) at (r1 |- up) {TII};
-\node[box, anchor=west] (rp)  at (r1 |- dn) {RP head};
-% anchored on rp, not tii: rp carries the longer label of the two, so it is the
-% binding constraint if either label is ever edited.
-\coordinate (r2) at ([xshift=9mm]rp.east);
-\node[hl,  anchor=west] (f1) at (r2 |- in) {Stage 1\\Routing fusion};
-\node[box, anchor=west] (lo) at ([xshift=9mm]f1.east) {LoRA selection};
-\node[box, anchor=west] (dr) at ([xshift=9mm]lo.east) {DRM / CRM};
-\node[box, anchor=west] (cl) at ([xshift=9mm]dr.east) {Classifier head};
-\node[hl]  (f2) at ([yshift=-2.1cm]cl.center) {Stage 2\\Classification fusion};
-\node[box] (out) at ([yshift=-3.7cm]cl.center) {Prediction};
-\draw[->] (in) -- (tii);
-\draw[->] (in) -- (rp);
-\draw[->] (tii) -- (f1);
-\draw[->] (rp) -- (f1);
-\draw[->] (f1) -- (lo);
-\draw[->] (lo) -- (dr);
-\draw[->] (dr) -- (cl);
-\draw[->] (cl) -- (f2);
+
+% ---------------- row 1 : the two sources ----------------
+\node[io] (in) at (0,0) {test\\image};
+\node[froz, anchor=west] (bb)   at (1.3,0.62) {\lk\,$h_{\mathrm{ptm}}$};
+\node[mlp,  anchor=west] (gw)   at ([xshift=3mm]bb.east) {\lk\,$g_\omega$};
+\node[pool, anchor=west] (lo1)  at (1.3,-0.62) {\lk\,LoRA $p_1$};
+\node[rph,  anchor=west] (proj) at ([xshift=3mm]lo1.east) {\lk\,$W$, ReLU};
+\node[rph,  anchor=west] (ridge)at ([xshift=3mm]proj.east) {ridge $W_{\mathrm{out}}$};
+
+\begin{scope}[on background layer]
+\node[draw=black!40, dashed, rounded corners=2pt, fill=cpanel,
+      fit=(bb)(gw)(lo1)(proj)(ridge), inner sep=3mm] (panel) {};
+\end{scope}
+\node[lab, anchor=south west] at ([xshift=0.5mm]panel.north west)
+      {two sources of evidence, one forward pass each};
+
+\node[ours, anchor=west] (f1) at ([xshift=5mm]panel.east)
+      {\textcolor{cours}{\textbf{Stage 1}}\\routing fusion};
+
+\draw[->] (in.east) -- ++(0.15,0) |- (bb.west);
+\draw[->] (in.east) -- ++(0.15,0) |- (lo1.west);
+\draw[->] (bb) -- (gw);
+\draw[->] (lo1) -- (proj);
+\draw[->] (proj) -- (ridge);
+\draw[->] (gw.east)    -- ++(0.30,0) |- (f1.west);
+\draw[->] (ridge.east) -- ++(0.30,0) |- (f1.west);
+\node[tag] at ([xshift=2.1mm, yshift=1.3mm]gw.east) {$u$};
+\node[tag] at ([xshift=2.1mm, yshift=1.3mm]ridge.east) {$s$};
+
+% ---------------- row 2 : the routed pipeline ----------------
+\def\ry{-2.95}
+\node[pool, minimum width=1.85cm, minimum height=9.5mm] (pl) at (1.0,\ry) {};
+\foreach \i in {0,...,3}{
+  \node[draw=black!55, fill=cpool!55, minimum width=2.3mm, minimum height=3.2mm,
+        inner sep=0] at ([xshift=(\i-1.5)*3.1mm, yshift=1.9mm]pl.center) {};}
+\node[font=\tiny, anchor=center] at ([yshift=-2.4mm]pl.center) {param.\ pool $P$};
+
+\node[blk, anchor=west] (dr) at ([xshift=4.5mm]pl.east) {DRM\,/\,CRM};
+\node[mlp, anchor=west] (sh) at ([xshift=4.5mm]dr.east) {shared head $g_{\theta_g}$};
+\node[ours, anchor=west] (f2) at ([xshift=4.5mm]sh.east)
+      {\textcolor{cours}{\textbf{Stage 2}}\\gated fusion};
+\node[io, anchor=west] (out) at ([xshift=4.5mm]f2.east) {prediction};
+
+\draw[->] (pl) -- (dr);
+\draw[->] (dr) -- (sh);
+\draw[->] (sh) -- (f2);
 \draw[->] (f2) -- (out);
-\draw[->, dashed] (rp.south) |- node[pos=0.75, above, font=\scriptsize]
-      {class scores of the RP head} (f2.west);
-\end{tikzpicture}}
-\caption{The inference pipeline. The bold-outlined blocks are the two added
-components. The random-projection head is computed exactly once and feeds both
-stages: task scores for the first, class scores for the second (dashed line).}
+\node[tag] at ($(sh.east)!0.5!(f2.west)$) {$\ell$};
+
+% ---------------- the two links between the rows ----------------
+% Both run in the empty lane below the panel, so they cross no block.
+\draw[->] (f1.south) -- ++(0,-1.28) -| (pl.north);
+\node[tag] at ([xshift=-1.1cm, yshift=-1.28cm]f1.south) {$\hat{t}_f$};
+\draw[->, dashed, cours!80] (ridge.south) -- ++(0,-1.2) -| (f2.north);
+\node[tag, text=cours!85] at ([xshift=2mm, yshift=-1.2cm]ridge.south) {$s$};
+
+\end{tikzpicture}
+\caption{The inference pipeline. Red marks the two blocks this paper adds;
+everything else is HRM-PET. Padlocks mark what stays frozen: the backbone, the
+first task's adapter and the random projection are never updated, and the ridge
+head is refitted in closed form once per task. The head is computed once per
+sample and read twice --- its task-level scores $s$ join TII's $u$ at Stage 1,
+and the same vector, read over classes, joins the routed logits $\ell$ at
+Stage 2 (red dashed).}
 \label{fig:pipeline}
 \end{figure}
 
 \subsection{The Second Source of Evidence}
 
-The second source must satisfy two constraints: it must add no trainable
-parameters, since parameters updated by gradients across a task sequence can be
-overwritten by later tasks; and it must preserve the exemplar-free protocol. A
-second-order classification head in the style of RanPAC~\cite{ref_ranpac}
-satisfies both.
+The second source must satisfy two constraints. Nothing in it may be updated by
+gradient descent across the sequence, since parameters trained that way can be
+overwritten by later tasks --- which does not forbid it from being fitted, only
+from being fitted in a way that forgets. And it must preserve the exemplar-free
+protocol. A second-order classification head in the style of
+RanPAC~\cite{ref_ranpac} satisfies both.
 
 The input feature $f \in \mathbb{R}^{d}$ with $d = 768$ is taken from the final
 feature layer of ViT-B/16 after attaching \emph{one} fixed LoRA parameter set,
