@@ -74,10 +74,10 @@ top-two-margin gate. Across three benchmarks and four seeds, DRM-proposal
 accuracy increases by $1.10$--$2.26$ points and classification accuracy by
 $0.69$--$1.50$, with no consistent improvement in forgetting or backward
 transfer. Single-seed ablations across five backbones show that the routing
-contribution depends on the gate. A four-seed comparison against ungated
-class-only fusion favours the full method on ImageNet-R and CIFAR-100, but
-does not resolve a difference on CUB-200; this comparison measures the joint
-addition of routing and gating. A grid over the two mixing weights shows that
+contribution depends on the gate. Running the two stages apart over four seeds
+separates them: routing alone is positive on ImageNet-R and CUB-200 and
+unresolved on CIFAR-100, while the gate carries most of the gain on the first
+two datasets and costs accuracy on the third. A grid over the two mixing weights shows that
 classification accuracy is nearly flat in the routing weight, so the reported
 value is not a resolved optimum.
 
@@ -737,33 +737,26 @@ the argument.
 
 \subsubsection{Routing gains depend on the gate.}
 Each stage alone beats the baseline on every backbone --- routing by $+0.29$ to
-$+0.74$, the classifier by $+0.51$ to $+3.07$ --- yet they are far from additive.
-With the gate off, adding routing to class fusion moves Acc@1 by only $-0.07$ to
-$+0.02$; that near-zero net does not establish identical predictions, since
-repairs and new errors may cancel.
-
-With the gate on, routing adds $+0.13$ to $+0.77$, positive on all five
-backbones, while the gate changes Acc@1 by $-1.32$ to $+0.85$ with class-only
-fusion against $-0.54$ to $+0.96$ when routing is present. This is an
-interaction: re-matching may change the confidence the gate acts on, though
-aggregate accuracies again do not say which predictions move.
-
-A single seed cannot settle a difference of a few tenths, so we repeated the
-comparison that matters --- the full method against ungated class-only fusion
-($w = 1$, $\beta = 0.5$, no gate) --- over seeds 42--45. Class-only reaches
-$74.49\pm0.14$, $90.15\pm0.16$ and $88.01\pm0.21$ Acc@1 on ImageNet-R, CIFAR-100
-and CUB-200, against $75.18\pm0.24$, $90.47\pm0.05$ and $87.88\pm0.27$ for the
-full method: paired changes of $+0.69$ $[+0.36, +1.01]$ and $+0.33$
-$[+0.03, +0.62]$, whose intervals exclude zero, and $-0.13$ $[-0.48, +0.23]$,
-which is unresolved and does not establish equivalence. The comparison cannot
-isolate routing, since it also changes the gate; the routing effect conditional
-on gating is supported only by the preceding single-seed, five-backbone
-ablation.
-
-The first stage is also the only component that moves Acc@task, though the two
-Acc@1 contributions must not be added. The classifier's isolated contribution is
+$+0.74$, the classifier by $+0.51$ to $+3.07$. Adding routing to class fusion
+moves Acc@1 by $-0.07$ to $+0.02$ with the gate off and by $+0.13$ to $+0.77$
+with it on, positive on all five backbones. The classifier's own contribution is
 smallest by far on Sup-21K, $+0.51$ against $+2.23$ to $+3.07$ elsewhere --- the
 backbone every design decision was taken on.
+
+\subsubsection{The two stages, run apart over four seeds.}
+On all three datasets we ran ungated class-only fusion ($w = 1$, $\beta = 0.5$,
+no gate), the same with the margin gate, and the full method, at seeds 42--45.
+Only $w$ separates the middle condition from the full method, so that pair
+isolates routing and the other isolates the gate.
+
+Routing is $+0.083$ $[+0.026, +0.140]$ on ImageNet-R, $-0.030$
+$[-0.085, +0.025]$ on CIFAR-100 and $+0.156$ $[+0.055, +0.257]$ on CUB-200. The
+gate is $+0.603$ and $+0.355$ on the first two, both excluding zero, and
+$-0.284$ $[-0.570, +0.002]$ on CUB-200. Each pair sums to the
+full-against-class-only change, $+0.69$, $+0.33$ and $-0.13$, to within $0.005$.
+Routing is positive on two datasets and unresolved on the third, and the loss on
+CUB-200 is the gate's: routing there is the largest of the three. The first
+stage remains the only component that moves Acc@task.
 
 \subsection{Sensitivity to the Mixing Weights}
 \label{sec:weights}
@@ -815,10 +808,10 @@ at fixed $\beta$ and gate, which we have not run.
 
 Design choices were explored on ImageNet-R, and CUB-200 also carries development
 experiments, so neither is an untouched holdout; CIFAR-100 tests transfer, but
-more seeds do not remove selection bias. The four-seed comparison changes
-routing and gating jointly, so a class-plus-gate control is still needed to
-isolate routing, and the twenty-cell grid, the conditional routing ablation and
-the weight grid are single-seed. Rows quoted in Table~\ref{tab:prior} come from
+more seeds do not remove selection bias. The twenty-cell grid, the conditional
+routing ablation and the weight grid are single-seed, and the isolated routing
+effect is a few hundredths of a point, small enough that four seeds resolve its
+sign but not its size. Rows quoted in Table~\ref{tab:prior} come from
 another implementation, and on 5-Datasets our result is below the published
 figure. We claim no consistent retention benefit or non-inferiority, did not
 split runtime into its phases, and did not measure repair/harm counts.
@@ -828,9 +821,10 @@ split runtime into its phases, and did not measure repair/harm counts.
 A fixed-feature RP classifier complements HRM-PET at two decisions, the DRM task
 proposal and final classification, at one extra adapter forward and a ridge fit
 per task. Acc@1 rises by $0.69$--$1.50$ points over three datasets and four
-seeds, and in all twenty cells of a single-seed pre-training grid; the four-seed
-comparison supports adding routing and gating jointly on two of three. The gains
-do not establish a reduction in forgetting.
+seeds, and in all twenty cells of a single-seed pre-training grid. Run apart
+over four seeds, routing and the gate contribute on different datasets, and the
+one dataset the method loses on loses to the gate. The gains do not establish a
+reduction in forgetting.
 
 %
 % Run-in form of the acknowledgment: the credits environment's heading skip
