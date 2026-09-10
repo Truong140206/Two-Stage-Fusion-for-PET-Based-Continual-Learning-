@@ -99,6 +99,19 @@ huấn luyện; nó phát hiện sai cấu hình được lưu và memory bị c
 
 ## 3. Pilot: ImageNet-R, seed 42, ba nhánh cùng checkpoint
 
+ImageNet-R được kiểm tra trước khi đọc checkpoint hoặc dùng GPU: phải có
+`train/` và `test/`, mỗi bên đủ 200 thư mục lớp cùng tên và có tệp ảnh. File nén
+hoặc thư mục lồng rỗng không được dùng để đoán đường dẫn. Không tự giải nén,
+di chuyển ảnh hoặc tạo lại train/test vì như vậy có thể đổi split lịch sử.
+Đường dẫn đã chọn được in ở dòng `EVALUATION_DATA_PATH=...`.
+
+Nếu tìm thấy hai split hợp lệ, chỉ định `--data-path` bằng đường dẫn cha của
+thư mục `imagenet-r` đã dùng lúc chạy báo cáo. Nếu không tìm thấy split hợp lệ,
+công cụ dừng và liệt kê vị trí đã kiểm tra; không tự tải lại dữ liệu.
+
+Nếu lượt trước đã lỗi đường dẫn với tag `maskfix_verify_v1`, giữ nguyên log
+lỗi và dùng `--tag maskfix_verify_v2` cho lượt chạy mới sau khi cập nhật code.
+
 ```bash
 "$PY" tools/verify_paper_results.py \
   --dataset imr --seeds 42 \

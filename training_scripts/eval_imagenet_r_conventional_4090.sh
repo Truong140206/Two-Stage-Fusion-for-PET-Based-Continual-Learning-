@@ -31,13 +31,12 @@ LOG_TAG="${LOG_TAG:-maskfix_v1}"
 [[ "${LOG_TAG}" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Invalid LOG_TAG" >&2; exit 64; }
 LOG_PATH="${OUTPUT_ROOT}/${RUN_BASENAME}_eval_conventional__${LOG_TAG}.log"
 
-if [[ -n "${DATA_PATH:-}" ]]; then
-  IMR_DATA_PATH="${DATA_PATH}"
-elif [[ -d "${DATASETS_ROOT}/imagenet-r/imagenet-r" || -f "${DATASETS_ROOT}/imagenet-r/imagenet-r.tar" ]]; then
-  IMR_DATA_PATH="${DATASETS_ROOT}/imagenet-r"
-else
-  IMR_DATA_PATH="${DATASETS_ROOT}"
-fi
+IMR_DATA_PATH="$(PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" "${PYTHON_BIN}" -c '
+import sys
+from tools.verify_paper_results import resolve_imr_data_path
+print(resolve_imr_data_path(sys.argv[1], sys.argv[2] or None))
+' "${DATASETS_ROOT}" "${DATA_PATH:-}")"
+echo "EVALUATION_DATA_PATH=${IMR_DATA_PATH}"
 
 for task_id in $(seq 1 10); do
   [[ -s "${RUN_DIR}/checkpoint/task${task_id}_checkpoint.pth" ]] || {

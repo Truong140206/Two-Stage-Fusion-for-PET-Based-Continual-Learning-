@@ -24,6 +24,66 @@ CORE = ('Acc@task', 'Acc@1', 'Acc@5', 'Loss')
 RETENTION = ('Forgetting', 'Backward')
 RP_PREFIX = '_eval_rp_lora_d10000_relu_l10000_nnone_t0_b0p0_p1_inone_c0_ra0ls0_f1d1'
 RP_SUFFIX = 'lsw0p0c0ca0cw{beta}sh1p0m1gmargin'
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm',
+                    '.tif', '.tiff', '.webp'}
+
+
+def _imr_split_problem(data_path, expected_classes):
+    """Read-only layout check; never extract, move images, or create a split."""
+    split_root = data_path / 'imagenet-r'
+    labels = []
+    for split in ('train', 'test'):
+        folder = split_root / split
+        if not folder.is_dir():
+            return 'missing ' + str(folder)
+        classes = sorted(p for p in folder.iterdir() if p.is_dir())
+        if len(classes) != expected_classes:
+            return '%s: expected %d class folders, found %d' % (
+                folder, expected_classes, len(classes))
+        for class_dir in classes:
+            if not any(p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+                       for p in class_dir.rglob('*')):
+                return 'no image files in ' + str(class_dir)
+        labels.append([p.name for p in classes])
+    if labels[0] != labels[1]:
+        return 'train/test class names differ under ' + str(split_root)
+    return None
+
+
+def resolve_imr_data_path(data_root, exact_path=None, expected_classes=200):
+    """Return the parent that Imagenet_R will append /imagenet-r to.
+
+    An archive or an empty nested directory is not evidence of a usable split.
+    Multiple prepared splits are ambiguous: require an explicit --data-path.
+    """
+    root = Path(data_root).expanduser().resolve()
+    if exact_path is not None:
+        candidates = [Path(exact_path).expanduser().resolve()]
+    else:
+        candidates = [root, root / 'imagenet-r']
+        if root.name == 'imagenet-r':
+            candidates.append(root.parent)
+    valid, failures, checked = [], [], set()
+    for candidate in candidates:
+        # Deduplicate the actual split root, including symlink aliases.
+        split_root = (candidate / 'imagenet-r').resolve()
+        if split_root in checked:
+            continue
+        checked.add(split_root)
+        problem = _imr_split_problem(candidate, expected_classes)
+        if problem is None:
+            valid.append(candidate)
+        else:
+            failures.append(problem)
+    if len(valid) == 1:
+        return valid[0]
+    if len(valid) > 1:
+        raise ValueError('Multiple prepared ImageNet-R splits found. Select the '
+                         'historical one with --data-path: ' + ', '.join(map(str, valid)))
+    raise ValueError('No prepared ImageNet-R train/test split found. '
+                     'Nothing was downloaded, extracted or re-split. '
+                     'Set --data-path to the parent of the existing imagenet-r folder.\n  '
+                     + '\n  '.join(failures))
 
 
 def log_name(run, arm, tag=None):
@@ -127,10 +187,11 @@ def source_digest():
 
 def command(args, seed, arm, tii, lora):
     dataset, config = DATASETS[args.dataset]
-    data_path = args.data_root
-    if args.dataset == 'imr' and ((data_path / 'imagenet-r' / 'imagenet-r').is_dir()
-                                  or (data_path / 'imagenet-r' / 'imagenet-r.tar').is_file()):
-        data_path = data_path / 'imagenet-r'
+    data_path = getattr(args, 'resolved_data_path', None)
+    if data_path is None:
+        data_path = (resolve_imr_data_path(args.data_root, getattr(args, 'data_path', None))
+                     if args.dataset == 'imr'
+                     else (getattr(args, 'data_path', None) or args.data_root))
     cmd = [sys.executable, '-m', 'torch.distributed.run', '--nproc_per_node=1',
            '--master_port=' + str(args.port), 'main.py', config,
            '--model', 'vit_base_patch16_224', '--original_model', 'vit_base_patch16_224',
@@ -186,10 +247,12 @@ def run_or_read(path, cmd, metadata, execute):
         process = subprocess.Popen(cmd, cwd=REPO, env=env, stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT, text=True,
                                    encoding='utf-8', errors='replace')
+        show_traceback = False
         for line in process.stdout:
             handle.write(line)
             handle.flush()
-            if FINAL.search(line) or 'Traceback' in line:
+            show_traceback = show_traceback or 'Traceback' in line
+            if FINAL.search(line) or show_traceback:
                 print(line.rstrip(), flush=True)
         code = process.wait()
         handle.write('VERIFICATION_EXIT_CODE=%d\n' % code)
@@ -204,6 +267,8 @@ def main():
     parser.add_argument('--seeds', nargs='+', type=int, default=[42])
     parser.add_argument('--output-root', type=Path, required=True)
     parser.add_argument('--data-root', type=Path, required=True)
+    parser.add_argument('--data-path', type=Path,
+                        help='Exact loader root; ImageNet-R appends /imagenet-r to this path')
     parser.add_argument('--tag', default='maskfix_verify_v1')
     parser.add_argument('--port', type=int, default=29558)
     parser.add_argument('--batch-size', type=int, default=24)
@@ -218,6 +283,11 @@ def main():
     args.data_root = args.data_root.resolve()
     if not args.output_root.is_dir() or not args.data_root.is_dir():
         parser.error('data-root and output-root must already exist')
+    if not args.checkpoints_only:
+        args.resolved_data_path = (
+            resolve_imr_data_path(args.data_root, args.data_path)
+            if args.dataset == 'imr' else (args.data_path or args.data_root).resolve())
+        print('EVALUATION_DATA_PATH=' + str(args.resolved_data_path), flush=True)
     source = source_digest()
     passed = True
     historical_complete = True

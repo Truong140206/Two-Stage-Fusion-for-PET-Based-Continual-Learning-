@@ -159,5 +159,116 @@ class VerificationTests(unittest.TestCase):
         self.assertIn('--dataset "${DS}"', tii_command)
 
 
+
+class DataLayoutTests(unittest.TestCase):
+    @staticmethod
+    def make_split(parent, classes=2):
+        for split in ('train', 'test'):
+            for label in range(classes):
+                folder = parent / 'imagenet-r' / split / ('class%d' % label)
+                folder.mkdir(parents=True, exist_ok=True)
+                # Only filenames/layout are checked here, not image decoding.
+                (folder / 'sample.jpg').write_bytes(b'fixture')
+
+    def test_valid_outer_split_beats_stale_archive_and_empty_nested_folder(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root).resolve()
+            self.make_split(root)
+            (root / 'imagenet-r' / 'imagenet-r').mkdir()
+            (root / 'imagenet-r' / 'imagenet-r.tar').write_bytes(b'not an archive')
+            before = sorted(str(p.relative_to(root)) for p in root.rglob('*'))
+            self.assertEqual(verify.resolve_imr_data_path(root, expected_classes=2), root)
+            self.assertEqual(before, sorted(str(p.relative_to(root)) for p in root.rglob('*')))
+
+    def test_genuinely_nested_split_is_supported(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root).resolve()
+            self.make_split(root / 'imagenet-r')
+            self.assertEqual(verify.resolve_imr_data_path(root, expected_classes=2),
+                             root / 'imagenet-r')
+
+    def test_actual_dataset_directory_is_supported(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root).resolve()
+            self.make_split(root)
+            self.assertEqual(verify.resolve_imr_data_path(root / 'imagenet-r',
+                                                          expected_classes=2), root)
+
+    def test_two_valid_splits_require_explicit_choice(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root).resolve()
+            self.make_split(root)
+            self.make_split(root / 'imagenet-r')
+            with self.assertRaisesRegex(ValueError, 'Multiple prepared'):
+                verify.resolve_imr_data_path(root, expected_classes=2)
+            self.assertEqual(verify.resolve_imr_data_path(root, exact_path=root,
+                                                          expected_classes=2), root)
+
+    def test_archive_only_is_rejected_without_unpacking(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root).resolve()
+            archive = root / 'imagenet-r.tar'
+            archive.write_bytes(b'not an archive')
+            with self.assertRaisesRegex(ValueError, 'Nothing was downloaded'):
+                verify.resolve_imr_data_path(root, expected_classes=2)
+            self.assertEqual(list(root.iterdir()), [archive])
+
+    def test_empty_class_is_rejected(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root).resolve()
+            self.make_split(root)
+            (root / 'imagenet-r' / 'test' / 'class1' / 'sample.jpg').unlink()
+            with self.assertRaisesRegex(ValueError, 'no image files'):
+                verify.resolve_imr_data_path(root, expected_classes=2)
+
+    def test_train_test_label_mismatch_is_rejected(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root).resolve()
+            self.make_split(root)
+            (root / 'imagenet-r' / 'test' / 'class1').rename(
+                root / 'imagenet-r' / 'test' / 'class9')
+            with self.assertRaisesRegex(ValueError, 'class names differ'):
+                verify.resolve_imr_data_path(root, expected_classes=2)
+
+    def test_all_three_imr_commands_use_the_validated_loader_parent(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root).resolve()
+            self.make_split(root, classes=200)
+            (root / 'imagenet-r' / 'imagenet-r').mkdir()
+            (root / 'imagenet-r' / 'imagenet-r.tar').write_bytes(b'not an archive')
+            args = SimpleNamespace(dataset='imr', data_root=root, port=29558, batch_size=24)
+            for arm in ('baseline', 'identity', 'full'):
+                cmd = verify.command(args, 42, arm, Path('/tii'), Path('/lora'))
+                self.assertEqual(cmd[cmd.index('--data-path') + 1], str(root))
+
+    def test_data_preflight_stops_before_loading_checkpoints_or_gpu(self):
+        with tempfile.TemporaryDirectory() as root:
+            argv = ['verify', '--dataset', 'imr', '--output-root', root,
+                    '--data-root', root, '--run']
+            with patch.object(verify.sys, 'argv', argv), \
+                    patch.object(verify, 'checkpoint_manifest') as checkpoints, \
+                    patch.object(verify, 'check_gpu') as gpu:
+                with self.assertRaisesRegex(ValueError, 'No prepared'):
+                    verify.main()
+                checkpoints.assert_not_called()
+                gpu.assert_not_called()
+
+    def test_process_error_prints_the_cause_not_just_traceback_header(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / 'failed.log'
+            process = SimpleNamespace(
+                stdout=['Traceback (most recent call last):\n',
+                        'FileNotFoundError: missing class folder\n'],
+                wait=lambda: 1)
+            output = io.StringIO()
+            with patch.object(verify, 'check_gpu'), \
+                    patch.object(verify.subprocess, 'Popen', return_value=process), \
+                    contextlib.redirect_stdout(output):
+                with self.assertRaisesRegex(RuntimeError, 'Evaluation failed'):
+                    verify.run_or_read(path, [], {}, True)
+            self.assertIn('FileNotFoundError: missing class folder', output.getvalue())
+            self.assertIn('VERIFICATION_EXIT_CODE=1', path.read_text())
+
+
 if __name__ == '__main__':
     unittest.main()
