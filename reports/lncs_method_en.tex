@@ -317,99 +317,130 @@ deviation floored at $10^{-6}$.
         \node[dot,draw=it,fill=it!65] at (.42,\b) {};
     }}
 ]
-\path[use as bounding box] (0,3.30) rectangle (12.1,9.3);
-\node[heading,text=ib] at (0,9.12) {(a) One image, two complementary predictions};
-% A real image is repeated to make reuse of x explicit.
-\node[inner sep=0pt] (input) at (.64,7.69)
-  {\includegraphics[width=1.05cm]{mallard.jpg}};
-\node[tinylabel] at (.64,7.10) {Input $x$};
-\pic at (2.30,7.65) {vit={ib/Bare + TII}};
-\draw[arr] (1.21,7.69) -- (1.83,7.69);
-\draw[arr] (2.85,7.69) -- node[tinylabel,above] {$u\to t_0$} (3.80,7.69);
-\node[inner sep=0pt] at (3.95,7.75)
-  {\includegraphics[width=.37cm]{mallard.jpg}};
-\pic at (4.65,7.65) {vit={ib/Initial pass + $g$}};
-% Adapter pool shown as individual selectable modules, not a text box.
-\node[tinylabel] at (4.66,8.88) {LoRA pool};
-\foreach \pos/\lab/\shade in {4.05/A/42,4.65/B/13,5.25/C/13}{
+\path[use as bounding box] (0,2.50) rectangle (12.1,9.65);
+\node[heading,text=ib] at (0,9.45) {(a) Inference: one image, two fusion stages};
+% Repeated ViT symbols are forward passes, not independently trained backbones.
+\node[inner sep=0pt] (input) at (.60,7.85)
+  {\includegraphics[width=1.00cm]{mallard.jpg}};
+\node[tinylabel] at (.60,7.26) {Input $x$};
+\pic at (2.00,7.81) {vit={ib/Bare + TII}};
+\draw[arr] (1.13,7.85) -- (1.53,7.85);
+\draw[arr] (2.55,7.85) -- node[tinylabel,above] {$u\to t_0$} (3.23,7.85);
+\node[inner sep=0pt] at (3.39,7.91)
+  {\includegraphics[width=.30cm]{mallard.jpg}};
+\pic at (4.04,7.81) {vit={ib/Initial pass + $g$}};
+\node[tinylabel] at (4.04,9.12) {LoRA pool};
+\foreach \pos/\lab/\shade in {3.48/1/13,4.04/{t_0}/42,4.60/{\hat T}/13}{
   \draw[ib,fill=ib!\shade,line width=.5pt]
-    (\pos-.23,8.38) rectangle (\pos+.23,8.70);
-  \node[tinylabel] at (\pos,8.54) {$p_{\lab}$};
+    (\pos-.23,8.61) rectangle (\pos+.23,8.93);
+  \node[tinylabel] at (\pos,8.77) {$p_{\lab}$};
 }
-\draw[io,line width=.9pt] (3.79,8.35) rectangle (4.31,8.73);
-\draw[arr,draw=io] (4.05,8.34) -- (4.05,8.22) -- (4.6,8.22) -- (4.6,8.13);
-\node[circle,draw=io,fill=io!15,line width=.8pt,minimum size=.64cm,inner sep=1pt,text=io] (route) at (6.48,7.69) {$F_R$};
-\draw[arr] (5.20,7.69) -- node[above] {$r$} (route);
-\node[tinylabel,text=io] at (6.48,8.42) {Stage 1\\task fusion};
-\draw[arr,draw=io] (route) -- node[tinylabel,above] {$\hat t_{\rm DRM}$} (7.83,7.69);
-\node[inner sep=0pt] at (7.97,7.75)
-  {\includegraphics[width=.37cm]{mallard.jpg}};
-\pic at (8.67,7.65) {vit={ib/DRM / CRM + $g$}};
-\draw[io,fill=io!18,line width=.7pt] (8.34,8.37) rectangle (9.03,8.70);
-\node[tinylabel,text=io] at (8.69,8.54) {$p_{\hat t}$};
-\draw[arr,draw=io] (8.67,8.35) -- (8.67,8.13);
-\node[circle,draw=ir,fill=ir!14,line width=.8pt,minimum size=.64cm,inner sep=1pt,text=ir] (class) at (10.45,7.69) {$F_C$};
-\draw[arr] (9.22,7.69) -- node[above] {$\ell$} (class);
-\node[tinylabel,text=ir] at (10.45,8.42) {Stage 2\\gated class fusion};
-\node[inner sep=0pt] at (11.67,7.69)
-  {\includegraphics[width=.73cm]{mallard.jpg}};
-\draw[arr,draw=ir] (class) -- (11.23,7.69);
-\node[tinylabel,text=ir] at (11.67,7.10) {$\hat y$: duck};
-% Fixed branch: encoder, feature strips, expansion connections, ridge matrix.
-\draw[arr,draw=it] (.11,7.34) -- (.11,6.08) -- (1.83,6.08);
-\pic at (2.30,6.04) {vit={it/Fixed $p_1$}};
-\draw[arr,draw=it] (2.85,6.08) -- (3.25,6.08);
+\draw[io,line width=.9pt] (3.78,8.58) rectangle (4.30,8.96);
+\draw[arr,draw=io] (4.04,8.57) -- (4.04,8.31);
+\node[circle,draw=io,fill=io!15,line width=.8pt,minimum size=.64cm,inner sep=1pt,text=io]
+  (route) at (5.80,7.85) {$F_R$};
+\draw[arr] (4.59,7.85) -- node[above] {$r$} (route);
+\node[tinylabel,text=io] at (5.80,9.12) {\textbf{Stage 1}};
+\node[tinylabel,text=io] at (5.80,8.68)
+  {max/task, $z$\\mix $w$, argmax};
+\draw[arr,draw=io] (route) -- node[tinylabel,above] {$\hat t_{\rm DRM}$} (7.35,7.85);
+\node[inner sep=0pt] at (7.50,7.91)
+  {\includegraphics[width=.30cm]{mallard.jpg}};
+\pic at (8.15,7.81) {vit={ib/DRM / CRM + $g$}};
+\node[tinylabel,text=ib] at (8.15,8.91) {Conditional\\passes};
+\node[tinylabel,text=ib] at (8.00,6.85)
+  {DRM: $\hat t_{\rm DRM}\ne t_0$\\CRM: low-conf.\ $r$};
+\node[circle,draw=ir,fill=ir!14,line width=.8pt,minimum size=.64cm,inner sep=1pt,text=ir]
+  (class) at (10.40,7.85) {$F_C$};
+\draw[arr] (8.70,7.85) -- node[above,pos=.28] {$\ell$} (class);
+% The continuous gate sees final routed logits, not r and not the RP scores.
+\fill[ir] (9.00,7.85) circle (.035);
+\node[tinylabel,draw=ir,fill=ir!6,rounded corners=1pt,inner sep=3pt]
+  (gate) at (10.40,8.77) {top-2 of softmax$(\ell)$\\continuous gate $\beta_i$};
+\draw[arr,draw=ir] (9.00,7.85) |- (gate.west);
+\draw[arr,draw=ir] (gate.south) -- (class.north);
+\node[tinylabel,text=ir] at (10.40,9.30) {\textbf{Stage 2}};
+\node[tinylabel,text=ir] at (11.27,6.61)
+  {class-wise $z$\\mix $\beta_i$\\restore $\ell$ scale};
+\node[inner sep=0pt] at (11.69,7.85)
+  {\includegraphics[width=.70cm]{mallard.jpg}};
+\draw[arr,draw=ir] (class) -- (11.28,7.85);
+\node[tinylabel,text=ir] at (11.69,7.24) {$\hat y$:\\Mallard};
+% Fixed RP branch; its single score vector is reused, never refitted on test x.
+\draw[arr,draw=it] (.10,7.51) -- (.10,5.83) -- (1.53,5.83);
+\pic at (2.00,5.79) {vit={it/Fixed $p_1$}};
+\draw[arr,draw=it] (2.55,5.83) -- (3.03,5.83);
 \foreach \k/\tone in {0/20,1/65,2/40,3/85}{
-  \fill[it!\tone] (3.34,{5.71+.18*\k}) rectangle ++(.21,.17);
+  \fill[it!\tone] (3.13,{5.46+.18*\k}) rectangle ++(.21,.17);
 }
-\node[tinylabel,text=it] at (3.45,5.40) {$f$\\768};
-\draw[arr,draw=it] (3.64,6.08) -- (4.03,6.08);
-\pic at (4.59,6.08) {net};
-\node[tinylabel,text=it] at (4.59,5.40) {$W^\top$\\ReLU};
-\draw[arr,draw=it] (5.14,6.08) -- (5.66,6.08);
+\node[tinylabel,text=it] at (3.24,5.14) {$f$\\768};
+\draw[arr,draw=it] (3.43,5.83) -- (3.96,5.83);
+\pic at (4.49,5.83) {net};
+\node[tinylabel,text=it] at (4.49,5.14) {Frozen $W^\top$\\ReLU};
+\draw[arr,draw=it] (5.04,5.83) -- (5.48,5.83);
 \foreach \k in {0,...,7}{
   \pgfmathtruncatemacro{\tone}{12+mod(31*\k,75)}
-  \fill[it!\tone] (5.78,{5.65+.115*\k}) rectangle ++(.23,.105);
+  \fill[it!\tone] (5.58,{5.40+.115*\k}) rectangle ++(.23,.105);
 }
-\node[tinylabel,text=it] at (5.97,5.40) {$h$\\$10^4$};
-\draw[arr,draw=ip] (6.10,6.08) -- (6.96,6.08);
-\pic at (7.45,6.08) {matrix={ip/$W_{\rm out}$}};
-\draw[arr,draw=ip] (7.92,6.08) -- (8.39,6.08);
+\node[tinylabel,text=it] at (5.70,5.14) {$h$\\$10^4$};
+\draw[arr,draw=ip] (5.93,5.83) -- (6.96,5.83);
+\pic at (7.45,5.83) {matrix={ip/$W_{\rm out}$}};
+\draw[arr,draw=ip] (7.92,5.83) -- (8.39,5.83);
 \foreach \pos/\height in {8.48/.57,8.70/.23,8.92/.13,9.14/.10}{
-  \fill[ip!75] (\pos,5.82) rectangle ++(.15,\height);
+  \fill[ip!75] (\pos,5.57) rectangle ++(.15,\height);
 }
-\draw[ip!70,line width=.3pt] (8.43,5.80) -- (9.34,5.80);
-\node[tinylabel,text=ip] at (8.88,5.40) {Class scores $s$};
-\draw[arr,draw=ip] (9.38,6.08) -- (10.45,6.08) -- (class.south);
-\draw[arr,draw=ip] (9.66,6.08) -- (9.66,6.76) -- (6.48,6.76) -- (route.south);
-\fill[ip] (9.66,6.08) circle (.04);
-\node[tinylabel,text=ip,fill=white,inner sep=1pt] at (7.73,6.76) {task-wise max of the same $s$};
-% Fitting is shown with samples, feature strips and accumulated matrix cells.
-\draw[black!25,line width=.35pt] (0,5.13) -- (12.1,5.13);
-\node[heading,text=it] at (0,4.91) {(b) After each task: keep statistics, not a photo memory};
+\draw[ip!70,line width=.3pt] (8.43,5.55) -- (9.34,5.55);
+\node[tinylabel,text=ip] at (8.88,5.14) {Class scores $s$};
+\draw[arr,draw=ip] (9.38,5.83) -- (10.40,5.83) -- (class.south);
+% The return path stays below the re-matching notes.
+\draw[arr,draw=ip] (9.63,5.83) -- (9.63,6.35) -- (5.80,6.35) -- (route.south);
+\fill[ip] (9.63,5.83) circle (.04);
+\node[tinylabel,text=ip,fill=white,inner sep=1pt] at (6.47,6.35) {same $s$};
+% Fitting: a labelled current-task sample, a fixed feature map, two accumulators.
+\draw[black!25,line width=.35pt] (0,4.87) -- (12.1,4.87);
+\node[heading,text=it] at (0,4.65) {(b) Fit on task $t$; retain $G$ and $C$, not examples};
 \foreach \dx/\dy in {.10/.10,.05/.05,0/0}{
-  \node[inner sep=1pt,draw=it!65,fill=white] at ({.67+\dx},{4.12+\dy})
-    {\includegraphics[width=.78cm]{mallard.jpg}};
+  \node[inner sep=1pt,draw=it!65,fill=white] at ({.58+\dx},{3.70+\dy})
+    {\includegraphics[width=.68cm]{mallard.jpg}};
 }
-\node[tinylabel] at (.73,3.62) {Task $t$};
-\draw[arr,draw=it] (1.20,4.15) -- (1.79,4.15);
-\pic[scale=.70] at (2.22,4.15) {net};
-\node[tinylabel,text=it] at (2.35,3.62) {Fixed, as in (a)};
-\draw[arr,draw=it] (2.65,4.15) -- node[tinylabel,above] {$h,y$} (3.66,4.15);
-\pic at (4.15,4.15) {matrix={ip/$G$}};
-\node[tinylabel,text=ip] at (5.00,4.64) {Accumulate};
-\pic at (5.86,4.15) {matrix={ip/$C$}};
-\draw[arr,draw=ip] (6.41,4.15) -- (7.00,4.15);
-\node[align=center,text=ip] at (8.49,4.17)
-  {Ridge solve};
-\node[tinylabel] at (8.49,3.62) {No gradient update};
-\draw[arr,draw=ip] (10.00,4.15) -- (10.67,4.15);
-\pic at (11.18,4.15) {matrix={ip/Updated $W_{\rm out}$}};
+\node[tinylabel] at (.62,3.14) {$(x,y)\in\mathcal D_t$};
+\draw[arr,draw=it] (1.05,3.73) -- (1.53,3.73);
+\pic[scale=.80] at (1.96,3.69) {vit={it/Fixed $p_1$}};
+\draw[arr,draw=it] (2.44,3.73) -- (2.82,3.73);
+\pic[scale=.75] at (3.25,3.73) {net};
+\node[tinylabel,text=it] at (3.25,3.14) {$W^\top$\\ReLU};
+\draw[arr,draw=it] (3.69,3.73) -- node[tinylabel,above] {$h$} (4.34,3.73);
+% Two distinct destinations: G uses h; C uses h and the observed label y.
+\draw[arr,draw=ip] (4.34,3.73) -- (4.34,4.03) -- (4.71,4.03);
+\draw[arr,draw=ip] (4.34,3.73) -- (4.34,3.32) -- (4.71,3.32);
+\node[tinylabel,draw=ip,fill=ip!7,inner sep=3pt,minimum width=2.30cm]
+  (gram) at (5.91,4.03) {$G\leftarrow G+hh^\top$};
+\node[tinylabel,draw=ip,fill=ip!7,inner sep=3pt,minimum width=2.30cm]
+  (cross) at (5.91,3.32) {$C\leftarrow C+h\mathbf e_y^\top$};
+\draw[arr,draw=it,dashed] (.62,2.95) -- (.62,2.72) --
+  node[tinylabel,below,pos=.53] {observed label $y$ (training only)}
+  (5.91,2.72) -- (cross.south);
+\node[tinylabel,draw=ip,fill=ip!7,rounded corners=1pt,inner sep=4pt]
+  (ridge) at (8.66,3.70) {Ridge solve\\$(G+\lambda I)W_{\rm out}=C$};
+\draw[arr,draw=ip] (gram.east) -- (7.30,4.03) |- (ridge.west);
+\draw[arr,draw=ip] (cross.east) -- (7.30,3.32) |- (ridge.west);
+\node[tinylabel] at (8.66,3.04) {No gradient update};
+\draw[arr,draw=ip] (ridge.east) -- (10.61,3.70);
+\pic at (11.11,3.70) {matrix={ip/Updated $W_{\rm out}$}};
+% Dashed parameter transfer is separate from solid image/score flow.
+\draw[arr,draw=ip,dashed] (11.11,4.10) -- (11.11,4.35) --
+  (7.45,4.35) -- (7.45,4.80) -- (6.97,4.80) -- (6.97,5.38) -- (7.17,5.48);
+\node[tinylabel,text=ip,fill=white,inner sep=1pt] at (9.11,4.35)
+  {used for inference in (a)};
 \end{tikzpicture}
-\caption{The two-stage pipeline. (a) Repeated thumbnails denote the same
-input. Initial adapted logits $r$, not bare TII scores $u$, enter $F_R$; one
-fixed RP branch supplies $s$ to both fusion stages. (b) Task-wise fitting keeps
-cumulative statistics, not images. Photo: T.~G.~Barnes/USFWS (public domain).}
+\caption{Two-stage fusion with shared frozen ViT weights and shared head $g$
+across adapted passes. $F_R$ uses initial adapted logits $r$, not TII logits $u$.
+Both $r,s$ undergo task-wise max and standardisation in $F_R$. CRM compares the
+current logits with the adapter of the second-ranked class of $r$ by log-sum-exp;
+it is skipped at the first task. Only seen classes/tasks are used. $z$ denotes
+standardisation; prediction is the argmax after $F_C$.
+Panel (b) shows per-sample updates.
+Photo: T.~G.~Barnes/USFWS (public domain).}
 \label{fig:pipeline}
 \end{figure}
 
