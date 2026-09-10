@@ -18,7 +18,9 @@ if [[ ! -x "${PYTHON_BIN}" ]]; then echo "Python not found" >&2; exit 1; fi
 RUN_BASENAME="$(basename "${RUN_DIR}")"
 SEED="${SEED:-}"; if [[ -z "${SEED}" && "${RUN_BASENAME}" =~ seed([0-9]+)$ ]]; then SEED="${BASH_REMATCH[1]}"; fi; SEED="${SEED:-42}"
 TII_DIR="${TII_DIR:-${OUTPUT_ROOT}/cub200_tii_original_10tasks_seed${SEED}}"
-LOG_PATH="${OUTPUT_ROOT}/${RUN_BASENAME}_eval_conventional.log"
+LOG_TAG="${LOG_TAG:-maskfix_v1}"
+[[ "${LOG_TAG}" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Invalid LOG_TAG" >&2; exit 64; }
+LOG_PATH="${OUTPUT_ROOT}/${RUN_BASENAME}_eval_conventional__${LOG_TAG}.log"
 
 for task_id in $(seq 1 10); do
   [[ -s "${RUN_DIR}/checkpoint/task${task_id}_checkpoint.pth" ]] || { echo "Missing LoRA checkpoint task${task_id}" >&2; exit 2; }

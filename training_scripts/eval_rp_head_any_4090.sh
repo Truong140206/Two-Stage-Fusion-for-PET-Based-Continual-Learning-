@@ -62,7 +62,9 @@ if [[ -z "${TII_DIR:-}" ]]; then echo "Set TII_DIR" >&2; exit 64; fi
 if [[ ! -x "${PYTHON_BIN}" ]]; then echo "Python not found" >&2; exit 1; fi
 RUN_BASENAME="$(basename "${RUN_DIR}")"
 SEED="${SEED:-}"; if [[ -z "${SEED}" && "${RUN_BASENAME}" =~ seed([0-9]+)$ ]]; then SEED="${BASH_REMATCH[1]}"; fi; SEED="${SEED:-42}"
-CONVENTIONAL_LOG="${OUTPUT_ROOT}/${RUN_BASENAME}_eval_conventional.log"
+LOG_TAG="${LOG_TAG:-maskfix_v1}"
+[[ "${LOG_TAG}" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Invalid LOG_TAG" >&2; exit 64; }
+CONVENTIONAL_LOG="${OUTPUT_ROOT}/${RUN_BASENAME}_eval_conventional__${LOG_TAG}.log"
 
 for task_id in $(seq 1 "${NUM_TASKS}"); do
   [[ -s "${RUN_DIR}/checkpoint/task${task_id}_checkpoint.pth" ]] || { echo "Missing LoRA checkpoint task${task_id}" >&2; exit 2; }
@@ -101,6 +103,7 @@ AUDIT_FLAG=""; [[ "${RP_ROUTE_AUDIT}" == "1" ]] && AUDIT_FLAG="--rp_route_audit"
 FUSE_FLAG=""; [[ "${RP_FUSE}" == "1" ]] && FUSE_FLAG="--rp_route_fusion --rp_route_fusion_weight ${RP_FUSE_W}"
 [[ "${RP_FUSE_DRM}" == "1" ]] && FUSE_FLAG="--rp_route_fusion_drm --rp_route_fusion_weight ${RP_FUSE_W} --rp_route_fusion_ls_weight ${RP_LS_W} --rp_class_fusion_weight ${RP_CLS_W} --rp_class_fusion_sharpen ${RP_CLS_SHARP} --rp_class_fusion_min_tasks ${RP_CLS_MIN} --rp_class_fusion_gate ${RP_CLS_GATE} --rp_fusion_ramp ${RP_RAMP} --rp_fusion_ramp_scope ${RP_RAMP_SCOPE}"
 LOG_PATH="${OUTPUT_ROOT}/${RUN_BASENAME}_eval_rp_${RP_SOURCE}_d${RP_DIM}_${RP_ACT}_l$(tag "${RP_LAMBDA}")_n${RP_NORM}_t${RP_LORA_TASK}_b$(tag "${RP_BLEND}")_p${RP_PIN}_i${RP_INORM}_c${CALIBRATE}_ra${RP_ROUTE_AUDIT}ls${RP_LAYER_STAT}_f${RP_FUSE}d${RP_FUSE_DRM}w$(tag "${RP_FUSE_W}")lsw$(tag "${RP_LS_W}")c${RP_COST}ca${RP_CLS_AUDIT}cw$(tag "${RP_CLS_W}")sh$(tag "${RP_CLS_SHARP}")m${RP_CLS_MIN}${GATE_TAG}${RAMP_TAG}${BARE_TAG}${LSEARCH_TAG}${BACKBONE_TAG}.log"
+LOG_PATH="${LOG_PATH%.log}__${LOG_TAG}.log"
 [[ -s "${LOG_PATH}" ]] && { echo "Refusing to overwrite: ${LOG_PATH}" >&2; exit 3; } || true
 
 cd "${REPO_ROOT}"

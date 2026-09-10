@@ -17,34 +17,65 @@ Usage:  python3 audit_weight_evidence.py [OUTPUT_ROOT]
         default OUTPUT_ROOT is ~/hrm-pet-output
 """
 import glob
+import math
 import os
 import re
 import sys
 from collections import defaultdict
 
 FINAL = re.compile(r'\[Average accuracy till task(\d+)\]\s*(.*)')
-NUM = re.compile(r'([A-Za-z@0-9/]+):\s*(-?\d+(?:\.\d+)?)')
-T3 = 3.182  # two-sided 95% Student-t, three degrees of freedom
+NUM = re.compile(r'([A-Za-z@0-9/]+):\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)')
+# Exact small-sample quantiles; larger studies use scipy (a repo dependency).
+T975 = {1: 12.706204736432095, 2: 4.302652729696142,
+        3: 3.182446305284263, 4: 2.7764451051977987}
 
 
 def undot(s):
     return s.replace('p', '.')
 
 
-def read_final(path):
-    """Return (num_tasks, {metric: value}) from the last final-average line."""
+def read_final(path, expected_tasks=None):
+    """Accept only a completed final stage, never a partial run's last row."""
+    if expected_tasks is None:
+        match = re.search(r'_(\d+)tasks_seed\d+', os.path.basename(path))
+        if not match:
+            return None, {}
+        expected_tasks = int(match.group(1))
     last = None
     try:
-        with open(path, 'r', errors='replace') as handle:
+        with open(path, 'r', encoding='utf-8', errors='replace') as handle:
             for line in handle:
                 found = FINAL.search(line)
                 if found:
                     last = found
     except OSError:
         return None, {}
-    if last is None:
+    if last is None or int(last.group(1)) != expected_tasks:
         return None, {}
-    return int(last.group(1)), {k: float(v) for k, v in NUM.findall(last.group(2))}
+    metrics = {k: float(v) for k, v in NUM.findall(last.group(2))}
+    if not all(k in metrics and math.isfinite(metrics[k])
+               for k in ('Acc@1', 'Acc@task', 'Acc@5', 'Loss')):
+        return None, {}
+    if expected_tasks > 1 and not all(k in metrics and math.isfinite(metrics[k])
+                                      for k in ('Forgetting', 'Backward')):
+        return None, {}
+    return expected_tasks, metrics
+
+
+def configuration_key(cfg, varying=('w',), across_seeds=True):
+    """Keep EVERY filename field except the explicitly varied coordinates.
+
+    This preserves dimension, calibration, pinning, backbone, ramps, and the
+    evaluator-version suffix, including fields this reader does not interpret.
+    """
+    key = cfg['file']
+    if across_seeds:
+        key = re.sub(r'_seed\d+(?=_eval_)', '_seed*', key)
+    if 'w' in varying:
+        key = re.sub(r'(?<=d[01])w[0-9p]+(?=lsw)', 'w*', key)
+    if 'beta' in varying:
+        key = re.sub(r'cw[0-9p]+(?=sh)', 'cw*', key)
+    return key
 
 
 def parse_name(name):
@@ -74,6 +105,14 @@ def parse_name(name):
     if src:
         cfg['source'], cfg['dim'] = src.group(1), src.group(2)
         cfg['act'], cfg['lambda'] = src.group(3), undot(src.group(4))
+    if not fuse or not beta or not src:
+        cfg['kind'] = 'other'
+    else:
+        try:
+            float(cfg['w'])
+            float(cfg['beta'])
+        except ValueError:
+            cfg['kind'] = 'other'
     return cfg
 
 
@@ -83,12 +122,13 @@ def stage(cfg):
         return cfg['kind']
     w = cfg.get('w', '?')
     beta = cfg.get('beta', '?')
-    routed = cfg.get('route_fusion') or cfg.get('route_drm')
-    if not routed and beta in ('0.0', '?'):
-        return 'RP-only'
-    if beta == '0.0':
+    if not cfg.get('route_drm'):
+        return 'RP-route-fusion' if cfg.get('route_fusion') else 'RP-only'
+    if float(beta) == 0.0 and float(w) == 1.0:
+        return 'baseline-identity'
+    if float(beta) == 0.0:
         return 'routing-only'
-    if w == '1.0':
+    if float(w) == 1.0:
         return 'class-only' + ('+gate' if cfg['gate'] != 'none' else '')
     return 'full' + ('+gate' if cfg['gate'] != 'none' else '')
 
@@ -96,12 +136,18 @@ def stage(cfg):
 def paired(pairs):
     """Mean, sample SD and 95% t interval of a list of paired differences."""
     n = len(pairs)
+    if not n or not all(math.isfinite(d) for d in pairs):
+        raise ValueError('paired differences must be nonempty and finite')
     mean = sum(pairs) / n
     if n < 2:
         return mean, 0.0, None, None
     var = sum((d - mean) ** 2 for d in pairs) / (n - 1)
     sd = var ** 0.5
-    half = T3 * sd / (n ** 0.5)
+    critical = T975.get(n - 1)
+    if critical is None:
+        from scipy.stats import t
+        critical = float(t.ppf(0.975, df=n - 1))
+    half = critical * sd / (n ** 0.5)
     return mean, sd, mean - half, mean + half
 
 
@@ -116,8 +162,11 @@ def main(root):
     rows = []
     for path in logs:
         cfg = parse_name(os.path.basename(path))
+        if cfg['kind'] == 'other':
+            continue
         tasks, met = read_final(path)
         if not met:
+            print('SKIP incomplete/invalid:', os.path.basename(path))
             continue
         cfg['tasks'] = tasks
         cfg['met'] = met
@@ -148,8 +197,11 @@ def main(root):
     grid = defaultdict(dict)
     for r in rows:
         if r['stage'].startswith('full') and r.get('gate') == 'margin':
-            grid[(r['run'], r['seed'])][(r.get('w'), r.get('beta'))] = \
-                r['met'].get('Acc@1')
+            key = configuration_key(r, varying=('w', 'beta'), across_seeds=False)
+            cell = (r.get('w'), r.get('beta'))
+            if cell in grid[(key, r['seed'])]:
+                raise ValueError('Ambiguous duplicate grid cell: ' + r['file'])
+            grid[(key, r['seed'])][cell] = r['met'].get('Acc@1')
     if not grid:
         print('KHONG co o nao khop (full + gate margin).')
     for (run, seed), cells in sorted(grid.items()):
@@ -163,8 +215,11 @@ def main(root):
                 v = cells.get((w, b))
                 line += '%10s' % ('-' if v is None else '%.2f' % v)
             print(line)
-        if len(cells) < 9:
-            print('  THIEU %d o so voi bang trong bai.' % (9 - len(cells)))
+        expected = {(w, b) for w in ('0.6', '0.7', '0.8')
+                    for b in ('0.3', '0.5', '0.7')}
+        missing = expected - cells.keys()
+        if missing:
+            print('  THIEU dung cac o trong bai:', sorted(missing))
     print()
 
     # ---- 3. w = 0.6 against w = 0.7, paired over seeds -------------------
@@ -175,8 +230,10 @@ def main(root):
     for r in rows:
         if r['kind'] != 'rp' or r.get('w') not in ('0.6', '0.7'):
             continue
-        dataset = r['run'].rsplit('_seed', 1)[0]
+        dataset = configuration_key(r, varying=('w',))
         key = (dataset, r['stage'], r.get('beta'), r.get('gate'))
+        if r['w'] in buckets[key].get(r['seed'], {}):
+            raise ValueError('Ambiguous duplicate paired run: ' + r['file'])
         buckets[key].setdefault(r['seed'], {})[r['w']] = r['met']
     if not buckets:
         print('KHONG co cap w nao de so.')
@@ -203,14 +260,14 @@ def main(root):
 
     # ---- 4. controls the paper says it does not have --------------------
     print('=' * 78)
-    print('4. HAI DOI CHUNG BAI DANG THIEU')
+    print('4. KIEM KE DOI CHUNG (KHONG TU SUY RA CUNG PROTOCOL)')
     print('=' * 78)
     for want, label in (('class-only+gate', 'class+gate, khong routing'),
-                        ('RP-only', 'RP-only / RanPAC cung protocol')):
+                        ('RP-only', 'RP-only (khong dong nghia RanPAC)')):
         got = defaultdict(set)
         for r in rows:
             if r['stage'] == want:
-                got[r['run'].rsplit('_seed', 1)[0]].add(r['seed'])
+                got[configuration_key(r, varying=())].add(r['seed'])
         if not got:
             print('%-34s: KHONG CO log nao' % label)
         for dataset, seeds in sorted(got.items()):
@@ -224,7 +281,7 @@ def main(root):
     print('=' * 78)
     for r in sorted(rows, key=lambda r: r['run']):
         low = r['run'].lower()
-        if 'imagenet-a' in low or 'imr_a' in low or '5-dataset' in low \
+        if low.startswith('ima_') or 'imagenet-a' in low or 'imr_a' in low or '5-dataset' in low \
                 or 'five' in low or 'inat' in low:
             print('%-30s seed %-4s %-16s tasks=%s Acc@1=%.4f'
                   % (r['run'][:30], r['seed'], r['stage'], r['tasks'],

@@ -12,10 +12,12 @@ by a closed-form ridge classifier built from second-order statistics.
 
 The second source is fused at the two points where the pipeline commits to a
 decision — once at the routing level and once at the classification level. It
-trains no parameters, stores no images, and costs one forward pass the pipeline
-already performs.
+does not retrain the HRM-PET parameters and stores no images. The RP classifier
+is fitted by a ridge solve after each task; inference uses one extra adapter
+forward per sample, shared by the two fusion stages.
 
-Measured over three datasets and four seeds against the HRM-PET baseline:
+Historical measurements (before the mask fix), over three datasets and four
+seeds against the HRM-PET baseline; retention must be rechecked:
 
 | axis | change |
 | --- | --- |
@@ -99,11 +101,11 @@ Two stages per dataset, in order: the task-identity module, then the LoRA pool.
 
 ```bash
 DATASETS_ROOT=/path/to/datasets OUTPUT_ROOT=/path/to/output \
-  bash training_scripts/train_any_4090.sh imr 42
+DATASET=imr SEED=42 bash training_scripts/train_any_4090.sh
 ```
 
-The first argument selects the dataset (`imr`, `cifar100`, `ima`,
-`fivedatasets`), the second the seed. Checkpoints land under `OUTPUT_ROOT`.
+Environment variables select the dataset (`imr`, `cifar100`, `cub200`, `ima`,
+`fivedatasets`) and seed. Checkpoints land under `OUTPUT_ROOT`.
 
 ## Evaluation
 
@@ -119,12 +121,16 @@ RP_FUSE_W=0.7 RP_CLS_GATE=margin RP_CLS_W=0.5 \
     /path/to/output/imr_lora_rank8_baseline_10tasks_seed42
 ```
 
-On ImageNet-R with the Sup-21K backbone at seed 42 this prints
+Historical ImageNet-R Sup-21K seed-42 output, before the seen-class-mask fix:
 
 ```
 Acc@task: 79.9699  Acc@1: 75.5116  Acc@5: 87.9822  Loss: 1.1911
 Forgetting: 3.0500  Backward: -2.8184
 ```
+
+The mask fix requires re-evaluating intermediate stages and retention metrics.
+The historical values above are not a certification of the corrected evaluator.
+See `reports/verification_after_mask_fix.md` for non-overwriting checks.
 
 Setting `RP_FUSE_W=1.0` and `RP_CLS_W=0.0` disables both stages and reproduces
 the HRM-PET baseline to the fourth decimal, so `w` doubles as a continuous

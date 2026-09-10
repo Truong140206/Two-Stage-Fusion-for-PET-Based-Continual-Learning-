@@ -27,7 +27,9 @@ fi
 SEED="${SEED:-42}"
 TII_DIR="${TII_DIR:-${OUTPUT_ROOT}/imr_tii_original_10tasks_seed${SEED}}"
 TRAIN_LOG="${TRAIN_LOG:-${OUTPUT_ROOT}/${RUN_BASENAME}.log}"
-LOG_PATH="${OUTPUT_ROOT}/${RUN_BASENAME}_eval_conventional.log"
+LOG_TAG="${LOG_TAG:-maskfix_v1}"
+[[ "${LOG_TAG}" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Invalid LOG_TAG" >&2; exit 64; }
+LOG_PATH="${OUTPUT_ROOT}/${RUN_BASENAME}_eval_conventional__${LOG_TAG}.log"
 
 if [[ -n "${DATA_PATH:-}" ]]; then
   IMR_DATA_PATH="${DATA_PATH}"
@@ -130,7 +132,8 @@ import re
 import sys
 
 candidate, reference = sys.argv[1:]
-metrics = ('Acc@task', 'Acc@1', 'Acc@5', 'Loss', 'Forgetting', 'Backward')
+metrics = ('Acc@task', 'Acc@1', 'Acc@5', 'Loss')
+print('Historical comparison: final-stage metrics only. Retention needs corrected intermediate stages.')
 limits = {'Loss': 0.001}
 
 

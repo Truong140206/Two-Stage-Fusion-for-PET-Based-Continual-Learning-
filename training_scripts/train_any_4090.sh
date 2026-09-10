@@ -64,8 +64,29 @@ echo "  LoRA -> ${LORA_DIR}"
 complete() { local d="$1" t; for t in $(seq 1 "${NUM_TASKS}"); do
   [[ -s "${d}/checkpoint/task${t}_checkpoint.pth" ]] || return 1; done; }
 
+validate_saved_run() {
+  "${PYTHON_BIN}" - "$1" "${DS}" "${SEED}" "${NUM_TASKS}" "${BACKBONE}" <<'PY'
+import sys
+from pathlib import Path
+import torch
+root, dataset, seed, tasks, model = sys.argv[1:]
+expected = dict(dataset=dataset, seed=int(seed), num_tasks=int(tasks), model=model)
+for stage in range(1, int(tasks) + 1):
+    path = Path(root) / 'checkpoint' / f'task{stage}_checkpoint.pth'
+    checkpoint = torch.load(path, map_location='cpu', weights_only=False)
+    saved = checkpoint.get('args')
+    for key, value in expected.items():
+        actual = saved.get(key) if isinstance(saved, dict) else getattr(saved, key, None)
+        if actual != value:
+            raise SystemExit(f'CHECKPOINT_MISMATCH: {path}: {key}={actual!r}, expected {value!r}. '
+                             'No checkpoint was overwritten. Investigate the existing run.')
+print('Existing checkpoint configuration: PASS', root)
+PY
+}
+
 if [[ "${STAGE}" == "tii" || "${STAGE}" == "both" ]]; then
   if complete "${TII_DIR}"; then
+    validate_saved_run "${TII_DIR}"
     echo "TII already complete, skipping."
   else
     START="$(date +%s)"
@@ -77,7 +98,7 @@ if [[ "${STAGE}" == "tii" || "${STAGE}" == "both" ]]; then
       --ca_storage_efficient_method covariance \
       --data-path "${DATA_PATH}" --lr 0.0005 --ca_lr 0.005 \
       --crct_epochs "${CRCT_EPOCHS}" --seed "${SEED}" \
-      --num_tasks "${NUM_TASKS}" \
+      --num_tasks "${NUM_TASKS}" --dataset "${DS}" \
       --train_inference_task_only --output_dir "${TII_DIR}"
     printf 'TII wall time seconds: %s\n' "$(( $(date +%s) - START ))"
   fi
@@ -85,7 +106,9 @@ fi
 
 if [[ "${STAGE}" == "lora" || "${STAGE}" == "both" ]]; then
   complete "${TII_DIR}" || { echo "TII incomplete; LoRA needs it" >&2; exit 2; }
+  validate_saved_run "${TII_DIR}"
   if complete "${LORA_DIR}"; then
+    validate_saved_run "${LORA_DIR}"
     echo "LoRA already complete, skipping."
   else
     START="$(date +%s)"

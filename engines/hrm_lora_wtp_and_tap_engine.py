@@ -959,6 +959,22 @@ def _blend_scores(head_scores, classifier_logits, weight):
     return head_log + weight * classifier_log
 
 
+def _mask_evaluation_logits(logits, class_mask, seen_task_count, args,
+                            evaluation_task=None):
+    """Mask every candidate BEFORE DRM/CRM selection and class fusion."""
+    if class_mask is None:
+        return logits
+    if bool(getattr(args, 'task_inc', False)) and evaluation_task is not None:
+        allowed = class_mask[evaluation_task]
+    elif bool(getattr(args, 'train_mask', False)):
+        allowed = [c for task in class_mask[:seen_task_count] for c in task]
+    else:
+        return logits
+    excluded = torch.ones(logits.shape[1], dtype=torch.bool, device=logits.device)
+    excluded[torch.as_tensor(allowed, dtype=torch.long, device=logits.device)] = False
+    return logits.masked_fill(excluded.unsqueeze(0), float('-inf'))
+
+
 @torch.no_grad()
 def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loader,
              device, i=-1, task_id=-1, class_mask=None, target_task_map=None, args=None, ):
@@ -991,6 +1007,7 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
                     output = original_model(input)
                     shared_features = output.get('pre_logits')
                     logits = output['logits']
+                    old_logits = logits
                     if args.train_mask and class_mask is not None:
                         mask = []
                         for id in range(task_id + 1):
@@ -1248,22 +1265,8 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
             logits = output['logits']
             
 
-            if args.task_inc and class_mask is not None:
-                # adding mask to output logits
-                mask = class_mask[i]
-                mask = torch.tensor(mask, dtype=torch.int64).to(device)
-                logits_mask = torch.ones_like(logits, device=device) * float('-inf')
-                logits_mask = logits_mask.index_fill(1, mask, 0.0)
-                logits = logits + logits_mask
-
-            if args.train_mask and class_mask is not None:
-                mask = []
-                for id in range(task_id + 1):
-                    mask.extend(class_mask[id])
-                not_mask = np.setdiff1d(np.arange(args.nb_classes), mask)
-                not_mask = torch.tensor(not_mask, dtype=torch.int64).to(device)
-                logits = logits.index_fill(dim=1, index=not_mask, value=float('-inf'))
-                #print(logits[0])
+            logits = _mask_evaluation_logits(
+                logits, class_mask, task_id + 1, args, evaluation_task=i)
             id_logits = logits
             routing_mode = str(getattr(args, 'task_routing_mode', 'class')).lower()
             if routing_mode == 'task_energy':
@@ -1335,9 +1338,9 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
             
             equal_drm = torch.nonzero(prompt_id != lora_id).flatten()
             output_drm = model(input[equal_drm], task_id=prompt_id[equal_drm])
-            output_drm_logits = output_drm['logits']
-            if routing_mode == 'task_energy' and args.train_mask and class_mask is not None:
-                output_drm_logits = output_drm_logits.index_fill(dim=1, index=not_mask, value=float('-inf'))
+            output_drm_logits = _mask_evaluation_logits(
+                output_drm['logits'], class_mask, task_id + 1, args,
+                evaluation_task=i)
             logits[equal_drm] = output_drm_logits
             #promtp_idx = output['prompt_idx']  # tensor B x topk
             
@@ -1352,9 +1355,9 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
                     error_output.append(logits[filtered_index_tensor,:])
                     # for i in range(ensemble_id.shape[1]):
                     out = model(error_input, task_id=ensemble_id[:,1])
-                    alternative_logits = out['logits']
-                    if routing_mode == 'task_energy' and args.train_mask and class_mask is not None:
-                        alternative_logits = alternative_logits.index_fill(dim=1, index=not_mask, value=float('-inf'))
+                    alternative_logits = _mask_evaluation_logits(
+                        out['logits'], class_mask, task_id + 1, args,
+                        evaluation_task=i)
                     error_output.append(alternative_logits)
                     error_output = torch.stack(error_output,dim=1)
                    
@@ -1419,6 +1422,11 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
 
             task_inference_acc = utils.task_inference_accuracy(prompt_id.unsqueeze(-1), target, target_task_map, filtered_index_tensor,re_id)
 
+            # Capture primary correctness before stage 2 replaces the logits.
+            routed_ok = None
+            if (bool(getattr(args, 'classifier_union_audit', False))
+                    and fusion_rp_scores is not None):
+                routed_ok = logits.argmax(dim=1).eq(target)
             class_weight = float(getattr(args, 'rp_class_fusion_weight', 0.0))
             # The RP head needs enough classes before its Gram estimate is
             # reliable, so the blend can be held back for the first tasks.
@@ -1472,7 +1480,6 @@ def evaluate(model: torch.nn.Module, original_model: torch.nn.Module, data_loade
                 # classifier often gets the class right despite a wrong route.
                 # This measures whether the RP head, used as a classifier in its
                 # own right, is correct where the routed head is wrong.
-                routed_ok = logits.argmax(dim=1).eq(target)
                 rp_ok = fusion_rp_scores.argmax(dim=1).eq(target)
                 metric_logger.meters['ClsRouted'].update(
                     routed_ok.float().mean().mul(100.0).item(),
