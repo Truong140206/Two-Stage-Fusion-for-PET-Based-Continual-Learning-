@@ -1,5 +1,43 @@
 # Checkpoint review — 2026-09-10
 
+## Thu hẹp kết luận theo audit/log trọng số — 2026-09-10, mới nhất
+
+Nguồn: hai đầu ra audit giống nhau, attachments
+e5f1c6c6-52b8-42ad-a73b-2bc954bee673 và 0a8f028d-0fd1-40d7-9566-64da1a32adfd,
+và tám final rows full-method cùng kết quả kiểm tra bốn đường dẫn control
+do tác giả gửi tiếp trong hội thoại. Đây không phải một lượt CUB mới.
+
+- Audit liệt kê769 log,439 log có final row thuộc các cấu hình được nhận diện.
+  Không được gọi toàn bộ phần còn lại là run lỗi. Các dòng THIEU áp dụng
+  từng cấu hình riêng, không phải yêu cầu chạy tất cả.
+- Đúng nhóm IMR Sup-21K, seed42, M=lambda=10000, p1, không chuẩn hóa,
+  w=.6/.7/.8, beta=.3/.5/.7, margin gate: đủ9 ô, khớp Table3.
+- So sánh full w=.6 trừ .7, beta=.5, margin, seeds42–45: Acc@1 deltas
+  [0.1020, -0.0336, 0.2263, 0.1373], mean0.108000, sampleSD0.107920,
+  CI95[-0.063724,0.279724]. Giữ số này và Acc@task+0.332 trong paper.
+- Tám log trên có task10, nhưng không có VERIFICATION_META/EXIT_MARKER.
+  Thiếu marker không tự chứng minh chạy lỗi; cũng không chứng nhận đúng
+  source/checkpoint hoặc đã re-evaluate sau maskfix. Gắn nhãn historical.
+- Không có ClsRouted trong các final rows vừa gửi. Audit không ghép được
+  cặp routing-only w=.6/.7. Đã bỏ claim +0.170 CI[+0.136,+0.204]:
+  chưa tìm được nguồn đủ để giữ claim, không kết luận hiệu ứng thực bằng0.
+- Bốn đường dẫn class-only+margin trên DINO/iBOT1K/iBOT21K/MoCo-v3 đều
+  MISSING. Đã bỏ claim routing góp +0.13..+0.77 trên cả năm backbone khi
+  gate bật; không lấy full-gated minus ungated-class làm routing effect.
+- Giữ ungated contrast -0.07..+0.02 và conditional contrasts Sup-21K trên
+  ba dataset/bốn seed theo log lịch sử. Sửa rounding routing-only gain cao
+  nhất từ0.74 thành0.73 (DINO70.9654-70.2347=0.7307).
+- Abstract, tiêu đề/đoạn ablation và Conclusion đã đồng bộ phạm vi.
+  Chưa thêm bảng RP-only/RanPAC: audit có RP-only nhưng phải tách feature
+  source/preprocessing và xác minh provenance, không gọi tương đương RanPAC.
+
+Không thay các ô trong main table hoặc grid; không đổi code, chạy GPU hay push.
+XeLaTeX hai lượt PASS, không undefined/overfull/underfull; warning vec có sẵn.
+Đã render xem đủ14 trang, kết luận/ack kết thúc trang12, references trang13–14.
+Chưa thể gọi bản này sẵn sàng nộp: CUB43–45, post-fix historical experiments
+và checkpoint/config provenance còn mở. Các đoạn review cũ phía dưới chỉ là
+lịch sử, đặc biệt những câu đã từng coi routing-only+0.170 là đủ bằng chứng.
+
 ## Bổ sung log CIFAR tuyệt đối — 2026-09-10, mới nhất
 
 Tác giả gửi đầu ra trích log maskfix_verify_v2, attachment

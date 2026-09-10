@@ -69,8 +69,8 @@ before re-matching, and class-level fusion with the final logits using a
 top-two-margin gate. Across three benchmarks and four seeds, DRM-proposal
 accuracy increases by $1.10$--$2.26$ points and classification accuracy by
 $0.69$--$1.50$, with no consistent improvement in forgetting or backward
-transfer. Single-seed ablations across five backbones show that the routing
-contribution depends on the gate. Four-seed conditional contrasts show a
+transfer. Single-seed ablations across five backbones find little added routing
+benefit under ungated class fusion. Four-seed conditional contrasts show a
 positive routing contribution with gated class fusion on ImageNet-R and CUB-200,
 but an unresolved effect on CIFAR-100. The gate's estimated contribution is
 negative on CUB-200, with a confidence interval including zero.
@@ -729,18 +729,17 @@ rose more there --- a widening gap, not a fall in final accuracy.
 \subsection{Ablation}
 \label{sec:ablation}
 
-We ablate \emph{cumulatively}, as the original work does, on ImageNet-R at seed
-$42$ across its five pre-training configurations, whose baselines run from
-$68.47$ to $74.02$ Acc@1. Only differences are reported, since only they carry
-the argument.
+The five-backbone ImageNet-R ablation uses seed $42$; baseline Acc@1 ranges
+from $68.47$ to $74.02$. We report differences between specified variants.
 
-\subsubsection{Routing gains depend on the gate.}
+\subsubsection{Routing with ungated class fusion.}
 Each stage alone beats the baseline on every backbone --- routing by $+0.29$ to
-$+0.74$, the classifier by $+0.51$ to $+3.07$. Adding routing to class fusion
-moves Acc@1 by $-0.07$ to $+0.02$ with the gate off and by $+0.13$ to $+0.77$
-with it on, positive on all five backbones. The classifier's own contribution is
-smallest by far on Sup-21K, $+0.51$ against $+2.23$ to $+3.07$ elsewhere --- the
-backbone every design decision was taken on.
+$+0.73$, the classifier by $+0.51$ to $+3.07$. Adding routing to ungated class
+fusion changes Acc@1 by $-0.07$ to $+0.02$. This does not establish equivalent
+variants. Gated class-only controls were not located for the four SSL backbones,
+so we cannot attribute a five-backbone gain to routing with the gate active.
+The classifier-only gain is smallest on Sup-21K, $+0.51$ against $+2.23$ to
+$+3.07$ elsewhere.
 
 \subsubsection{Conditional contributions over four seeds.}
 On all three datasets we ran ungated class-only fusion ($w = 1$, $\beta = 0.5$,
@@ -791,8 +790,8 @@ which routing repairs improve classification or establish equivalent weights.
 The maximum is $w=0.6$, not the reported $0.7$. Across four seeds, $0.6$ gains
 $+0.332$ $[+0.143,+0.522]$ Acc@task and $+0.108$ $[-0.064,+0.280]$ Acc@1
 over $0.7$ with the gate and $\beta=0.5$; the Acc@1 sign reverses on seed 43.
-Without class fusion ($\beta=0$), its Acc@1 gain is $+0.170$
-$[+0.136,+0.204]$. We retain the earlier routing-stage choice $w=0.7$
+These are historical full-method logs, not a routing-only weight comparison.
+We retain the earlier routing-stage choice $w=0.7$
 for consistency, not as an established full-method optimum.
 
 \subsection{Limitations}
@@ -814,12 +813,11 @@ and have not measured phase-level costs or sample-level repair/harm counts.
 
 \section{Conclusion}
 
-A fixed-feature RP head complements HRM-PET's task proposal and final
-classification, adding one adapter forward per image and one ridge fit per task.
-Reported Acc@1 gains are $0.69$--$1.50$ points across three datasets.
-Routing's contribution depends on class fusion and its gate; the negative CUB
-gate estimate is unresolved. Post-fix verification remains incomplete, and the
-accuracy gains do not establish reduced forgetting.
+A fixed-feature RP head supports task-proposal and class fusion, with reported
+Acc@1 gains of $0.69$--$1.50$ points across three datasets. Routing adds little
+under ungated class fusion; gated contrasts are dataset-dependent and the
+negative CUB gate estimate is unresolved. Post-fix verification remains
+incomplete. Accuracy gains do not establish reduced forgetting.
 
 %
 % Run-in form of the acknowledgment: the credits environment's heading skip
