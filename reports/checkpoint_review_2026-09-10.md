@@ -1,5 +1,44 @@
 # Checkpoint review — 2026-09-10
 
+## Bổ sung log CIFAR tuyệt đối — 2026-09-10, mới nhất
+
+Tác giả gửi đầu ra trích log maskfix_verify_v2, attachment
+fa2495b7-393e-4bda-8887-c1d3bc7a9d0a. Đã tính độc lập lại mean và sample SD
+từ bốn final rows seeds42–45. Mỗi nhánh baseline/identity/full CIFAR đều được
+script báo COMPLETE (đủ 10 stage, có exit code0); các source hashes được in
+đều là 6747fed54a6f9679632bfdbbed1d3ebf2832dc801cf950b6164460f5a8858da9.
+Đầu ra này không chứa toàn bộ checkpoint manifest hoặc phép so từng stage;
+không mở rộng kết luận provenance ngoài các kiểm tra đã có ở lượt trước.
+
+| Metric | Baseline mean ± sample SD | Full mean ± sample SD |
+|---|---|---|
+| Forgetting | 3.894475 ± 0.083898 | 3.744450 ± 0.124065 |
+| Backward | -3.872225 ± 0.066955 | -3.736125 ± 0.111635 |
+
+Đã thay hai ô Pending của Table1 bằng 3.74 ± 0.12 và -3.74 ± 0.11,
+bỏ câu giải thích Pending không còn dùng. Paired changes/CI giữ nguyên.
+R1 nay đã xử lý đủ cả absolute và paired statistics ở precision log cung cấp.
+Không chạy mô hình, không đổi code hoặc các con số của CUB.
+
+CUB trong tag này: seed42 đủ cả ba nhánh; seed43 baseline COMPLETE nhưng
+identity INCOMPLETE_OR_FAILED và full MISSING; seeds44–45 cả ba nhánh MISSING.
+Chưa nhận đầu ra audit_weight_evidence; grid/ablation/weight và các mục xác
+minh khác vẫn còn mở. Không coi bảng CUB bốn seed đã được xác minh đầy đủ.
+
+Các đoạn Pending CIFAR và hashes ở mục sau mô tả bản aad3e01 TRƯỚC bổ sung
+này; không còn là trạng thái hiện tại. Tag checkpoint cũ vẫn giữ nguyên.
+
+XeLaTeX hai lượt PASS; đã render kiểm tra các trang9–14 sau cập nhật, không
+thấy lỗi bố cục. PDF vẫn14 trang, References bắt đầu trang13; không có
+undefined/overfull/underfull, chỉ warning vec có sẵn.
+
+SHA-256 workspace sau bổ sung:
+
+| Tệp | SHA-256 |
+|---|---|
+| lncs_method_en.tex | C413CFC78549C23A78CAE4640EEE073933978C3B4DA0213E1086F53BA447BEA1 |
+| lncs_method_en.pdf | 375E93C01EC32C1445CE87B0ED30E9EAAE895E860C45038A2CD6F908A9049D91 |
+
 ## Cập nhật sau khắc phục — 2026-09-10
 
 Đã sửa trực tiếp nguồn LaTeX và biên dịch lại PDF cùng tên. Không tạo bản sao
