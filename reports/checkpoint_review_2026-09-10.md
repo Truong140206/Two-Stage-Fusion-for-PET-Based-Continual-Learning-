@@ -1,5 +1,95 @@
 # Checkpoint review — 2026-09-10
 
+## Deadline review — 2026-09-11 (current)
+
+Read-only review of the same English source/PDF; no paper numbers, figures,
+model code, checkpoints, or hyperparameters changed in this review.
+
+### New evidence closes CUB main-result verification
+
+User attachments 458ec443-3e22-426e-9a51-ce7d5017a0b8 and
+04a3783f-8aa9-441a-b495-4ad61940ea0f show CUB seeds43–45 completing all
+three arms under paperfix_verify_v3. Identity all stages, historical final
+baseline/full, consistency and historical coverage all PASS. The second output
+reuses completed logs, not an independent second GPU evaluation. Lab pytest:
+96 passed. CUB seed42 was already completed under maskfix_verify_v2.
+
+Acc@1 baseline/full at seeds43/44/45 respectively:
+86.6136/87.7534, 86.0530/87.6587, 86.3388/88.2766. Intermediate Acc@1
+and final retention match historical logs; intermediate Loss changes.
+The new n=3 summary must not replace the paper's n=4 results.
+
+### Priority findings before September16
+
+1. Update the stale CUB-pending statements in Setup and Table1 caption.
+   Main verification is now covered across all three datasets/four seeds;
+   historical grid/ablation verification is a separate open item.
+2. The fixed-feature assumption needs a real checkpoint test: the LoRA RP
+   path calls the currently loaded model with adapter index0. pin_rp_extractor
+   snapshots original_model, not this LoRA path. Compare patch embeddings,
+   tokens, transformer blocks, final norm and the four task0 K/V LoRA slices
+   across all ten checkpoints before asserting fixed feature space. Classifier
+   MLP/fc_norm/head occur after pre_logits and must not be compared as features.
+3. The nearest controlled comparator is the exact same RP head used alone.
+   Add RP-only, ungated class-only, gated class-only and full in one table.
+   RP-only on HRM-PET LoRA is NOT a faithful reproduction of official RanPAC.
+   Published baselines are contextual, not controlled evidence of superiority.
+4. Sections4.4/4.5 give twenty-cell/five-backbone ranges without the underlying
+   table. Supply a compact table or accessible manifest, and keep single-seed
+   and historical-provenance limitations explicit. Do not invent missing cells.
+5. Full w=.6 vs .7: verify four pairs; keep .7 fixed for the deadline rather
+   than choose a winner from the evaluation set. An unresolved difference is
+   not equivalence. Gate benefit on CUB and retention remain unresolved.
+6. Novelty is the reuse of RP evidence at two decision points, not ridge/RP.
+   Existing conditional routing effects are small. A measured inference/fit
+   cost comparison would strengthen the value argument, but the historical
+   total283s is not such a measurement. Phase profiling and sample repair/harm
+   counts are not supplied by the new checker.
+7. Shorten repeated caveats in abstract/conclusion, move own diagnostics out of
+   Related Work into Experiments, and recover space from the dedicated figure
+   page for the ablation table. Preserve limitations once, clearly; no unsupported
+   stronger claims. No new architecture or test-selected hyperparameter changes
+   are recommended this close to submission.
+
+### Visual and reference checks
+
+Rendered and inspected all14 pages at this revision. Content/ack ends on12;
+references are13–14. No visible overlapping text/figure labels or missing glyphs;
+figure5 has substantial unused page space and 7pt labels remain relatively small.
+All fonts embedded,30 citation keys and30 bibliography items, no missing/duplicate
+keys. Existing compilation log: no undefined/overfull/underfull; vec warning only.
+No recompilation or live Overleaf test was performed in this read-only review.
+
+Official https://soict.org/submission/paper-submission/ checked September11:
+full paper September16, max12 pages excluding references, CCIS/LNCS template,
+single-blind with authors, PDF without page numbers. Cutoff timezone not stated
+on that page; do not assume AoE. Core HRM-PET/RanPAC/DLEPEM sources rechecked
+against NeurIPS/publisher/official code. Bibliography metadata could be made more
+uniform (pages/DOIs), but no new false core reference was identified.
+
+### Runnable evidence checker (not yet executed on the lab)
+
+tools/finish_soict_checks.py has modes audit/core/weights/ssl. audit uses CPU and
+existing logs only, combines CUB v2 seed42 with v3 seeds43–45, checks checkpoint
+provenance/fixed-feature tensors, verifies identity and historical final core,
+and prints n=4 main summaries. New evaluation requires --run. core adds36 runs
+(3 controls x3 datasets x4 seeds); weights adds4 IMR full-w=.6 runs; ssl adds8
+gated-control/full runs on four SSL backbones at seed42. They are separate modes;
+do not start concurrently or duplicate the earlier18-run batch if already active.
+
+Successful main baseline/identity/full logs are never rerun or rewritten. New
+logs have source/checkpoint/command/driver hashes and exit markers, and are
+reused only on exact provenance match. Incomplete/conflicting logs stop the run.
+Before each new evaluation require16GiB free by default; this is a preflight
+check, not a GPU reservation or an OOM guarantee. No automatic waiting/killing,
+dataset splitting, downloads by this checker, or model checkpoint writes.
+SSL constructors may still require existing external pretrained assets.
+
+New helper tested locally:11 CPU-only unit tests PASS; existing26 verification
+unit tests PASS. These do not validate GPU numerical results. Evaluator source
+files unchanged. Script must be transferred explicitly to the lab before use;
+it has not been pushed to the public remote.
+
 ## Thu hẹp kết luận theo audit/log trọng số — 2026-09-10, mới nhất
 
 Nguồn: hai đầu ra audit giống nhau, attachments
