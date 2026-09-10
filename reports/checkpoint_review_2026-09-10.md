@@ -1,6 +1,80 @@
 # Checkpoint review — 2026-09-10
 
-## Kết luận
+## Cập nhật sau khắc phục — 2026-09-10
+
+Đã sửa trực tiếp nguồn LaTeX và biên dịch lại PDF cùng tên. Không tạo bản sao
+paper/folder mới; không đổi code, pipeline, checkpoint mô hình hoặc chạy lab/GPU.
+Tag paper-checkpoint-2026-09-10 vẫn trỏ tới 64f60a3, giữ nguyên bản trước sửa.
+Phần review gốc bên dưới được giữ để truy nguyên; các số dòng của nó là lịch sử.
+
+### Đã xử lý
+
+- R1: cập nhật paired CIFAR Forgetting thành -0.150 ± 0.095, Backward thành
+  +0.136 ± 0.095, CI95 tương ứng [-0.302, +0.002] và [-0.015, +0.287].
+  Acc@5 delta làm tròn +0.218 ± 0.057; Loss delta -0.0003 ± 0.0012.
+  Hai ô Proposed retention tuyệt đối chuyển thành Pending có giải thích:
+  chưa đủ bốn final rows sau sửa để tính mean/sample SD, không giữ số cũ
+  hoặc suy ngược SD từ số làm tròn.
+- R2: bỏ kết luận gate gây hại rõ ràng trên CUB. Ước lượng -0.284 có CI
+  [-0.570, +0.002], chứa 0; không đồng nghĩa full thua HRM-PET.
+- R3: phân biệt routing-only với full minus gated class-only; ghi rõ gate
+  được đo bằng gated minus ungated class-only. Đây là hiệu ứng có điều kiện,
+  không phải đóng góp độc lập của hai stage.
+- R4: bỏ luận điểm chưa có căn cứ rằng w=.7 tối ưu/ổn định trên mọi metric.
+  Phân biệt grid một seed, đối chiếu full bốn seed và routing-only bốn seed.
+  Giữ w=.7 vì nhất quán lựa chọn trước, không khẳng định tối ưu full method.
+- R5: sửa phạm vi sanity check thành IMR/CIFAR42–45 và CUB42; đánh dấu CUB
+  trong main table là kết quả lịch sử chờ xác minh đầy đủ. Identity PASS
+  không được dùng để chứng nhận toàn bộ full/grid/ablation.
+- R6: bổ sung LoRA rank/block/KV, split số task/lớp, RP fit dùng train split
+  với eval transform, cấu hình preprocessing, seed, chuẩn hóa, CRM và revision
+  code. Bổ sung nguồn dataset/ViT/MoCo-v3/iBOT/DINO; hoàn thiện MoTE và DS-AL.
+  Table 2 tách rõ số trích từ HRM-PET (3 seed) và chạy nội bộ (seed42);
+  bold chỉ xếp hạng trong từng nhóm, không ngụ ý đối chứng cùng protocol.
+- R7: giới hạn phát biểu PET vào họ task-specific; phân biệt closed-form fit
+  với không huấn luyện; thêm điều kiện fixed map/exact arithmetic cho joint fit;
+  phân biệt ước tính RAM với peak đo thực; chi phí forward theo ảnh, ridge theo
+  task; gắn số 74.31 với diagnostic routing-only, không với full.
+  Ghi rõ nguy cơ CUB/ImageNet pretraining overlap chưa được audit.
+- Rút diễn giải lặp ở intro/related work/kết quả để giữ 12 trang nội dung,
+  không đổi cỡ chữ, lề, class LLNCS hoặc dùng khoảng cách âm.
+
+### Còn thiếu dữ liệu hoặc xác minh, không được gọi là đã hoàn tất
+
+1. Bốn final rows CIFAR baseline/full seeds42–45 sau maskfix để điền hai ô
+   Proposed Forgetting/Backward; cần log đủ precision, không số bảng làm tròn.
+2. Xác minh hoàn chỉnh CUB43–45 và các run lịch sử grid/ablation/weight,
+   kèm config/log/checkpoint manifest. Lượt này không chạy vì lab đang bận.
+3. Đối chiếu tensor backbone/p1 qua checkpoint, protocol/class order và
+   pretraining provenance. Mô tả code không thay thế kiểm tra checkpoint thực.
+4. RanPAC/RP-only cùng protocol, chi phí theo phase và sample-level repair/harm
+   là thiếu sót thực nghiệm đã công khai, chưa có số để bổ sung.
+
+Đây là bản checkpoint đã sửa lỗi có bằng chứng, CHƯA phải bản sẵn sàng nộp.
+
+### Kiểm tra bản sau sửa
+
+- XeLaTeX hai lượt thành công. PDF 14 trang: nội dung/kết luận/ack kết thúc
+  trang12; References trang13–14. Đã render và xem đủ từng trang; không thấy
+  chồng chữ, cắt bảng, mất ảnh hoặc lỗi dấu tiếng Việt.
+- Không undefined citation/reference, không overfull/underfull box; 30 citation
+  keys tương ứng 30 bibliography entries, không thiếu hoặc thừa key.
+- Font đều embedded. Còn warning amsmath về math accent vec có sẵn;
+  không phải lỗi compile/render. Không chứng nhận compile trực tiếp trên Overleaf.
+- 26 unittest công cụ verification PASS trên CPU; không phải full pytest/GPU
+  và không xác minh lại kết quả mô hình.
+- Ảnh mallard giữ nguyên hash; chỉ source/PDF và tài liệu review thay đổi trong
+  Git. Không push remote.
+
+SHA-256 tệp sau sửa tại workspace:
+
+| Tệp | SHA-256 |
+|---|---|
+| lncs_method_en.tex | 96C931F1A2145E122E27C4C6A7CCDCCACF2DB1722E09739511504CC25DFDD578 |
+| lncs_method_en.pdf | 9B8482DFD507EC6A7873D0025A451D0BA296CAA8E0D72137814D53623DFA6898 |
+| figure_assets/mallard.jpg | 04B95BDE9B65ECD95931B2FA8310714EDFB12DFC70B3E4F19905969D40363B8A |
+
+## Review gốc trước sửa — kết luận lịch sử
 
 Có thể lưu làm mốc phát triển; CHƯA nên gọi là bản sẵn sàng nộp.
 Không phát hiện sai công thức cốt lõi trong nhánh inference dùng cho paper.
