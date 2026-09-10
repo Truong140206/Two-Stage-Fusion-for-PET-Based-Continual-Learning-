@@ -325,13 +325,11 @@ deviation floored at $10^{-6}$.
 % Main inference lane.
 \node[inner sep=0pt] (input) at (.52,6.15)
   {\includegraphics[width=.94cm]{mallard.jpg}};
-\node[tinylabel] at (.52,5.50) {Input $x$};
+\node[tinylabel] at (.52,6.86) {Input $x$};
 \draw[arr] (1.04,6.15) -- (1.48,6.15);
 \pic at (1.95,6.11) {vit={ib/Bare TII}};
-\draw[arr] (2.50,6.15) -- node[tinylabel,above] {$u\to t_0$} (3.19,6.15);
-\node[inner sep=0pt] at (3.34,6.22)
-  {\includegraphics[width=.28cm]{mallard.jpg}};
-\pic at (3.95,6.11) {vit={ib/Initial pass + $g$}};
+\draw[arr] (2.50,6.15) -- node[tinylabel,above] {$t_0$} (3.48,6.15);
+\pic at (3.95,6.11) {vit={ib/Initial pass}};
 \node[tinylabel,draw=ib,fill=ib!12,inner sep=3pt] (adapter) at (3.95,7.00)
   {LoRA $p_{t_0}$};
 \draw[arr] (adapter.south) -- (3.95,6.63);
@@ -342,10 +340,8 @@ deviation floored at $10^{-6}$.
 \node[tinylabel,text=io] at (5.76,6.57) {\textbf{1 Routing}};
 \draw[io!25] (5.10,6.36) -- (6.42,6.36);
 \node[tinylabel] at (5.76,5.78) {Max / task\\$z$-score\\Mix $w$\\Argmax};
-\draw[arr,draw=io] (6.55,6.15) -- node[tinylabel,above] {$\hat t_{\rm DRM}$} (7.27,6.15);
-\node[inner sep=0pt] at (7.42,6.22)
-  {\includegraphics[width=.28cm]{mallard.jpg}};
-\pic at (8.03,6.11) {vit={ib/DRM / CRM + $g$}};
+\draw[arr,draw=io] (6.55,6.15) -- node[tinylabel,above] {$\hat t_{\rm DRM}$} (7.56,6.15);
+\pic at (8.03,6.11) {vit={ib/DRM / CRM}};
 \node[tinylabel,text=ib] at (8.03,7.00) {Conditional\\adapter passes};
 \draw[arr] (8.58,6.15) -- node[tinylabel,above] {$\ell$} (9.18,6.15);
 % Stage 2: the gate is internal, avoiding an extra crossing control wire.
@@ -354,15 +350,16 @@ deviation floored at $10^{-6}$.
 \node[tinylabel,text=ir] at (10.105,6.57) {\textbf{2 Classes}};
 \draw[ir!25] (9.31,6.36) -- (10.90,6.36);
 \node[tinylabel] at (10.105,5.78)
-  {Top-2 gate\\$z$-score\\Mix $\beta_i$\\Rescale};
+  {Gate from $\ell$\\$z$-score\\Mix $\beta_i$\\Rescale};
 \draw[arr,draw=ir] (11.03,6.15) -- (11.41,6.15);
 \node[inner sep=0pt] at (11.79,6.15)
   {\includegraphics[width=.66cm]{mallard.jpg}};
 \node[tinylabel,text=ir] at (11.79,5.50) {$\hat y$:\\Mallard};
 % Second lane: RP features, expansion and class-score profile.
-\node[heading,text=it] at (0,4.82) {Fixed RP branch};
+\node[heading,text=it] at (.20,4.82) {Fixed RP branch};
 \node[tinylabel,text=it,anchor=west] at (2.98,4.82) {one extra pass};
-\draw[arr,draw=it] (.07,5.79) -- (.07,3.89) -- (1.48,3.89);
+\draw[arr,draw=it] (input.south) -- (.52,5.18) -- (.07,5.18) --
+  (.07,3.89) -- (1.48,3.89);
 \pic at (1.95,3.85) {vit={it/Fixed $p_1$}};
 \draw[arr,draw=it] (2.50,3.89) -- (2.99,3.89);
 \foreach \k/\tone in {0/20,1/65,2/40,3/85}{
@@ -371,7 +368,7 @@ deviation floored at $10^{-6}$.
 \node[tinylabel,text=it] at (3.21,3.20) {$f$\\768};
 \draw[arr,draw=it] (3.43,3.89) -- (3.89,3.89);
 \pic at (4.43,3.89) {net};
-\node[tinylabel,text=it] at (4.43,3.20) {Frozen $W^\top$\\ReLU};
+\node[tinylabel,text=it] at (4.43,3.15) {$W^\top$ + ReLU};
 \draw[arr,draw=it] (4.98,3.89) -- (5.37,3.89);
 \foreach \k in {0,...,7}{
   \pgfmathtruncatemacro{\tone}{12+mod(31*\k,75)}
@@ -380,14 +377,18 @@ deviation floored at $10^{-6}$.
 \node[tinylabel,text=it] at (5.60,3.20) {$h$\\$10^4$};
 \draw[arr,draw=ip] (5.83,3.89) -- (6.36,3.89);
 \pic at (6.85,3.89) {matrix={ip/$W_{\rm out}$}};
-\draw[arr,draw=ip] (7.32,3.89) -- (7.66,3.89);
-\foreach \pos/\height in {7.76/.57,7.98/.23,8.20/.13,8.42/.10}{
+\draw[arr,draw=ip] (7.32,3.89) -- (7.60,3.89);
+\foreach \pos/\height in {7.69/.57,8.01/.23,8.33/.13,8.65/.10}{
   \fill[ip!75] (\pos,3.63) rectangle ++(.15,\height);
 }
-\draw[ip!70,line width=.3pt] (7.71,3.61) -- (8.64,3.61);
-\node[tinylabel,text=ip] at (8.18,3.20) {Class scores $s$};
+\draw[ip!70,line width=.3pt] (7.62,3.61) -- (8.88,3.61);
+\node[tinylabel,text=ip] at (8.255,3.12) {Class scores $s$};
+\foreach \pos/\lab in {7.765/1,8.085/2,8.405/3,8.725/4}{
+  \node[font=\fontsize{6}{7}\selectfont,text=ip,inner sep=0pt]
+    at (\pos,3.44) {$c_{\lab}$};
+}
 % One score vector fans out to two inputs; paths have a dedicated empty lane.
-\draw[arr,draw=ip] (8.73,3.89) -- (10.105,3.89) -- (10.105,5.10);
+\draw[arr,draw=ip] (8.98,3.89) -- (10.105,3.89) -- (10.105,5.10);
 \draw[arr,draw=ip] (9.10,3.89) -- (9.10,4.48) -- (5.76,4.48) -- (5.76,5.10);
 \fill[ip] (9.10,3.89) circle (.04);
 \node[tinylabel,text=ip,fill=white,inner sep=2pt] at (7.14,4.48) {reuse the same $s$};
@@ -403,7 +404,7 @@ deviation floored at $10^{-6}$.
 \pic[scale=.80] at (1.91,1.42) {vit={it/Fixed $p_1$}};
 \draw[arr,draw=it] (2.39,1.46) -- (2.76,1.46);
 \pic[scale=.75] at (3.19,1.46) {net};
-\node[tinylabel,text=it] at (3.19,.82) {$W^\top$\\ReLU};
+\node[tinylabel,text=it] at (3.19,.62) {$W^\top$ + ReLU};
 \draw[arr,draw=it] (3.63,1.46) -- node[tinylabel,above] {$h$} (4.16,1.46);
 \node[tinylabel,draw=ip!65,fill=ip!5,rounded corners=2pt,inner sep=4pt,minimum width=2.25cm]
   (gram) at (5.57,1.83) {$G\leftarrow G+hh^\top$};
@@ -418,19 +419,21 @@ deviation floored at $10^{-6}$.
   (ridge) at (8.65,1.44) {Ridge solve\\$(G+\lambda I)W_{\rm out}=C$};
 \draw[arr,draw=ip] (gram.east) -- (6.99,1.83) |- (ridge.west);
 \draw[arr,draw=ip] (cross.east) -- (6.99,1.06) |- (ridge.west);
-\node[tinylabel,text=black!65] at (8.65,.73) {No gradient update};
+\node[tinylabel,text=black!65] at (8.65,.70) {Closed-form fit};
 \draw[arr,draw=ip] (ridge.east) -- (10.35,1.44);
-\pic at (10.84,1.44) {matrix={ip/Updated $W_{\rm out}$}};
+\pic at (10.84,1.44) {matrix={ip/$W_{\rm out}$}};
 % Parameter reuse is labelled rather than threaded through the diagram's lanes.
 \node[tinylabel,text=ip] at (10.84,2.14) {used in (a)};
 \end{tikzpicture}
-\caption{Two-stage fusion. Repeated thumbnails denote the same input; adapted
-passes share head $g$. Stage 1 standardises task-wise maxima of $r$ and $s$;
+\caption{Two-stage fusion. All inference passes use the same image; adapted
+passes share head $g$. TII selects $t_0$; the projection $W$ is frozen.
+Stage 1 standardises task-wise maxima of $r$ and $s$;
 Stage 2 uses the top-two probability margin of $\ell$ for its continuous gate
 (Eqs.~\ref{eq:gate}--\ref{eq:affine}), then predicts by argmax.
 DRM runs if $\hat t_{\rm DRM}\ne t_0$; CRM uses low-confidence $r$ and its
 second-ranked class's task, comparing logits by log-sum-exp (not at task 1).
-Only seen classes/tasks participate. Photo: T.~G.~Barnes/USFWS (public domain).}
+Only seen classes/tasks participate; score bars are schematic.
+Photo: T.~G.~Barnes/USFWS (public domain).}
 \label{fig:pipeline}
 \end{figure}
 
