@@ -39,7 +39,7 @@ def file_hash(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def feature_tensors(state):
+def feature_tensors(state, model='vit_base_patch16_224'):
     """Actual pre_logits path: embeddings, transformer, norm, adapter index 0.
 
     The classifier MLP/head/fc_norm run AFTER pre_logits and are excluded.
@@ -49,8 +49,17 @@ def feature_tensors(state):
                 if k in ('cls_token', 'pos_embed')
                 or k.startswith(('patch_embed.', 'blocks.', 'norm.'))}
     if not all(any(k.startswith(prefix) for k in selected)
-               for prefix in ('patch_embed.', 'blocks.0.', 'blocks.11.', 'norm.')):
+               for prefix in ('patch_embed.', 'blocks.0.', 'blocks.11.')):
         raise ValueError('Unexpected ViT feature state; cannot certify invariance')
+    has_norm = any(k.startswith('norm.') for k in selected)
+    if model == 'vit_base_patch16_224_mocov3':
+        # This constructor sets fc_norm=True: norm is Identity (no tensors).
+        # fc_norm is applied AFTER pre_logits; validate its presence, but do
+        # not include classifier-side parameters in the RP feature hash.
+        if has_norm or not {'fc_norm.weight', 'fc_norm.bias'} <= state.keys():
+            raise ValueError('Unexpected MoCo-v3 norm/fc_norm structure')
+    elif not has_norm:
+        raise ValueError('Missing pre_logits norm tensors: ' + model)
     if not all(k in selected for k in ('cls_token', 'pos_embed')):
         raise ValueError('Missing embedding tensors')
     for key in LORA_KEYS:
@@ -64,10 +73,10 @@ def feature_tensors(state):
     return selected
 
 
-def feature_hash(state, components=None):
+def feature_hash(state, components=None, model='vit_base_patch16_224'):
     import torch
     digest = hashlib.sha256()
-    for key, tensor in sorted(feature_tensors(state).items()):
+    for key, tensor in sorted(feature_tensors(state, model).items()):
         tensor = tensor.detach().cpu().contiguous()
         if not torch.isfinite(tensor).all():
             raise ValueError('Nonfinite feature tensor: ' + key)
@@ -104,7 +113,7 @@ def manifest(tii, lora, dataset, model, seed, pretrained=None):
                     if getattr(saved, key, None) != expected:
                         raise ValueError('Unsupported LoRA configuration: ' + str(path))
                 parts = {}
-                current = feature_hash(checkpoint['model'], parts)
+                current = feature_hash(checkpoint['model'], parts, model=model)
                 if fixed is None:
                     fixed = current
                     fixed_parts = parts
@@ -216,7 +225,14 @@ def main():
     parser.add_argument('--tag', default='soict_final_v1')
     parser.add_argument('--run', action='store_true')
     parser.add_argument('--min-free-gib', type=float, default=16.0)
+    parser.add_argument('--ssl-backbones', nargs='+',
+                        choices=tuple(suffix.lstrip('_') for suffix, _, _ in BACKBONES),
+                        help='Only these SSL backbones; use mocov3 to finish the two remaining runs')
     args = parser.parse_args()
+    if args.ssl_backbones and args.mode != 'ssl':
+        parser.error('--ssl-backbones requires --mode ssl')
+    if args.ssl_backbones and len(set(args.ssl_backbones)) != len(args.ssl_backbones):
+        parser.error('Duplicate SSL backbone')
     if not re.fullmatch(r'[A-Za-z0-9_-]+', args.tag):
         parser.error('Invalid tag')
     if not 5 <= args.min_free_gib <= 24:
@@ -236,7 +252,8 @@ def main():
         args.resolved_data_path = (verify.resolve_imr_data_path(args.data_root)
                                   if dataset == 'imr' else args.data_root)
         results = {}
-        entries = ([(suffix, model, pre, 42) for suffix, model, pre in BACKBONES]
+        entries = ([(suffix, model, pre, 42) for suffix, model, pre in BACKBONES
+                    if not args.ssl_backbones or suffix.lstrip('_') in args.ssl_backbones]
                    if args.mode == 'ssl' else
                    [('', 'vit_base_patch16_224', None, seed) for seed in (42, 43, 44, 45)])
         for suffix, model, pretrained, seed in entries:
@@ -264,7 +281,8 @@ def main():
                     contrast(dataset + ' ' + a + '_MINUS_' + b, results[a], results[b])
             if args.mode == 'weights':
                 contrast(dataset + ' FULL_W06_MINUS_W07', results['w06'], results['full'])
-    print('SOICT_EVIDENCE_COMPLETE=' + args.mode, flush=True)
+    selection = (':' + ','.join(args.ssl_backbones) if args.ssl_backbones else '')
+    print('SOICT_EVIDENCE_COMPLETE=' + args.mode + selection, flush=True)
 
 
 if __name__ == '__main__':

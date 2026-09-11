@@ -93,6 +93,40 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             finish.feature_tensors(state)
 
+    def moco_state(self):
+        state = self.state()
+        del state['norm.weight']
+        state['fc_norm.bias'] = 'tensor'
+        return state
+
+    def test_moco_identity_norm_is_valid(self):
+        selected = finish.feature_tensors(self.moco_state(), 'vit_base_patch16_224_mocov3')
+        self.assertNotIn('fc_norm.weight', selected)
+        self.assertNotIn('fc_norm.bias', selected)
+        self.assertIn('blocks.11.norm1.weight', selected)
+        self.assertTrue(all(k in selected for k in finish.LORA_KEYS))
+
+    def test_missing_norm_not_allowed_for_other_models(self):
+        for model in ('vit_base_patch16_224', 'vit_base_patch16_224_dino'):
+            with self.assertRaises(ValueError):
+                finish.feature_tensors(self.moco_state(), model)
+
+    def test_moco_rejects_missing_fc_norm_or_unexpected_norm(self):
+        state = self.moco_state()
+        del state['fc_norm.bias']
+        with self.assertRaises(ValueError):
+            finish.feature_tensors(state, 'vit_base_patch16_224_mocov3')
+        state = self.moco_state()
+        state['norm.weight'] = 'tensor'
+        with self.assertRaises(ValueError):
+            finish.feature_tensors(state, 'vit_base_patch16_224_mocov3')
+
+    def test_moco_missing_transformer_still_rejected(self):
+        state = self.moco_state()
+        del state['blocks.11.norm1.weight']
+        with self.assertRaises(ValueError):
+            finish.feature_tensors(state, 'vit_base_patch16_224_mocov3')
+
     def test_main_tags_and_read_only(self):
         stages = {i: dict.fromkeys(finish.METRICS, 1.0) for i in range(1, 11)}
         for dataset, seed, expected in (('cub200', 42, 'maskfix_verify_v2'),
@@ -111,9 +145,11 @@ class EvidenceTests(unittest.TestCase):
 
     def test_modes_have_expected_run_counts(self):
         row = dict.fromkeys(finish.METRICS, 1.0)
-        for mode, count in (('audit', 0), ('core', 36), ('weights', 4), ('ssl', 8)):
+        for mode, count in (('audit', 0), ('core', 36), ('weights', 4), ('ssl', 8), ('ssl', 2)):
             argv = ['check', '--mode', mode, '--output-root', '/out',
                     '--data-root', '/data']
+            if count == 2:
+                argv += ['--ssl-backbones', 'mocov3']
             with contextlib.ExitStack() as stack:
                 stack.enter_context(patch.object(sys, 'argv', argv))
                 stack.enter_context(patch.object(Path, 'is_dir', return_value=True))
@@ -128,6 +164,8 @@ class EvidenceTests(unittest.TestCase):
             self.assertEqual(run.call_count, count)
             for call in run.call_args_list:
                 self.assertFalse(call.args[0].run)
+                if count == 2:
+                    self.assertEqual(call.args[4], 'vit_base_patch16_224_mocov3')
 
     def test_read_only_variant_never_launches(self):
         args = self.args()

@@ -1,5 +1,68 @@
 # Checkpoint review — 2026-09-10
 
+## Results received and MoCo audit correction — 2026-09-11 (latest)
+
+Attachment c0e6208c-3f0b-4597-bc22-f018d4290da9 contains the complete run
+transcript from soict_finish_GBaXoc.log. Lab107tests PASS. Source digest remains
+6747fed54a6f9679632bfdbbed1d3ebf2832dc801cf950b6164460f5a8858da9.
+Independently counted46 unique EVIDENCE_FINAL rows, each following tasks1–10:
+core36, weights4, SSL6. Markers confirm audit/core/weights complete; SSL stopped
+before MoCo evaluation. This is NOT completion of the whole48-run batch.
+
+Main fixed-feature tensor checks now PASS on all12 dataset/seed combinations
+across ten checkpoints each. Protocol, identity all stages and historical final
+core comparisons PASS. Main means match the paper, including CUB n=4.
+The small previously documented CIFAR retention changes remain; no claim that
+all intermediate metrics are identical. DINO/iBOT1K/iBOT21K fixed-feature
+checks also PASS at seed42. No MoCo invariant conclusion yet.
+
+Four-seed final Acc@1, mean +/- sample SD (computed again from final rows):
+
+| Method | ImageNet-R | CIFAR-100 | CUB-200 |
+|---|---|---|---|
+| HRM-PET | 73.943875 +/- .476855 | 89.782500 +/- .027538 | 86.383625 +/- .248578 |
+| Same-feature RP-only | 69.885925 +/- .165950 | 88.800000 +/- .197990 | 87.259350 +/- .271426 |
+| Ungated class-only | 74.493800 +/- .141171 | 90.147500 +/- .157348 | 88.006125 +/- .207748 |
+| Gated class-only | 75.096975 +/- .213999 | 90.502500 +/- .078049 | 87.721900 +/- .259690 |
+| Full | 75.179650 +/- .240664 | 90.472500 +/- .050580 | 87.878350 +/- .274068 |
+
+Full minus RP-only paired Acc@1: IMR+5.293725 CI[5.048580,5.538870],
+CIFAR+1.672500 CI[1.369366,1.975634], CUB+.619000 CI[.148907,1.089093].
+This is a matched-head control, not a full official RanPAC reproduction.
+RP-only Loss uses uncalibrated ridge scores; do not interpret its large Loss
+as a controlled calibration comparison. RP-only Acc@task is the task of its
+predicted class, not a DRM-proposal metric.
+
+Verified conditional routing Acc@1 contributions: IMR+.082675 CI[.025628,.139722],
+CIFAR-.030000 CI[-.085122,.025122], CUB+.156450 CI[.055407,.257493].
+Gate without routing: IMR+.603175 CI[.327365,.878985], CIFAR+.355000
+CI[.056884,.653116], CUB-.284225 CI[-.570428,.001978]. These reproduce the
+previous historical estimates. Full is not uniformly best among the variants;
+ungated class-only has the largest CUB mean. Do not select a per-dataset winner
+from these evaluations and then present it as a prespecified method.
+
+Full w=.6 minus .7 is verified: Acc@1+.108000 CI[-.063724,.279724];
+Acc@task+.332350 CI[.143000,.521700]. No reason established to replace w=.7.
+SSL seed42 gated class-only/full: DINO72.1447/72.9140 (+.7693),
+iBOT1K73.6373/74.4126 (+.7753), iBOT21K75.4100/75.8404 (+.4304).
+No multi-seed confidence interval can be inferred for these three comparisons.
+
+The stop is an audit-tool assumption, not evidence of model tensor drift or
+GPU failure: vit_base_patch16_224_mocov3 sets fc_norm=True; VisionTransformer
+therefore uses norm=Identity. Its state has no norm tensors. fc_norm runs AFTER
+pre_logits, so it is not part of the RP feature path. The checker now accepts
+only that specific known MoCo structure, requires fc_norm weight/bias, and still
+hashes all embeddings/blocks and task0 LoRA. Other backbones still require norm.
+Added --ssl-backbones mocov3 to run only the remaining two evaluations.
+Completion marker is ssl:mocov3, not a claim that this invocation ran all SSL.
+
+Local15 helper tests and26 existing verification tests PASS. No engine/config/
+model code or PDF changed. New helper driver hash changes, so do NOT rerun the
+old all-mode loop against completed logs; use the MoCo filter and keep all46
+old logs with their original metadata. The MoCo failure preceded RUN/log creation,
+so the same soict_final_v1 tag can be used for those two still-missing files.
+Historical20-cell grid, phase costs and sample repair/harm remain open.
+
 ## Deadline review — 2026-09-11 (current)
 
 Read-only review of the same English source/PDF; no paper numbers, figures,
