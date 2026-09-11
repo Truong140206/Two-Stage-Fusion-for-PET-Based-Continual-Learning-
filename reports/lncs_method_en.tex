@@ -602,10 +602,11 @@ which task $i$ has been learned. Lower is better for Loss and Forgetting.
 \subsubsection{Sanity check.}
 $w=1$ restores the baseline DRM proposal and $\beta=0$ bypasses class fusion.
 After correcting unseen-class masking, this identity matches the baseline to
-logged precision at every stage for ImageNet-R/CIFAR seeds 42--45 and CUB seed 42.
+logged precision at every stage for all three datasets and seeds 42--45.
 For example, ImageNet-R seed 42 gives Acc@task $77.7914$, Acc@1 $74.0191$ and
-Loss $1.2305$. CUB seeds 43--45 and the historical grid/ablations still require
-complete post-fix verification; identity agreement alone does not validate them.
+Loss $1.2305$. Main runs, four-seed controls and the joint weight grid were
+re-evaluated. Backbone/first-adapter feature tensors match across checkpoints
+in all twelve main and four SSL runs; the historical cross-dataset audit is pending.
 
 \subsection{Main Results}
 \label{sec:results}
@@ -619,7 +620,7 @@ deviation describes the stability of the improvement, not the seeds' difficulty.
 \setlength{\tabcolsep}{4pt}
 \caption{Final results, mean $\pm$ sample SD over seeds 42--45; Change is paired
 full minus baseline. Accuracy/retention are percentages (changes in points).
-CUB values are historical pending complete post-fix verification.}\label{tab:main}
+All three datasets have complete post-fix verification.}\label{tab:main}
 \begin{tabular}{llrrr}
 \hline
 Dataset & Metric & HRM-PET & Proposed & Change\\
@@ -716,15 +717,13 @@ comparison remains the paired baseline--full difference in Table~\ref{tab:main}.
 \subsection{The Full Grid}
 \label{sec:grid}
 
-The original work covers four datasets by five pre-training configurations; we
-rebuilt all twenty cells, evaluating both methods through one code path at seed
-$42$. Every cell improves on both accuracy axes: Acc@task by $+0.97$ to $+4.57$
-and Acc@1 by $+0.59$ to $+3.58$, against baselines spanning $31.8$ to $93.8$
-Acc@1. Retention is descriptive rather than conclusive: final accuracy on
-earlier tasks rises in all twenty cells, by $+1.83$ on average, while accuracy
-at learning time rises by $+1.58$, so Backward, their difference, stays small.
-It worsens in five cells, which by that identity means learning-time accuracy
-rose more there --- a widening gap, not a fall in final accuracy.
+The historical $4\times5$ grid uses one code path at seed $42$; its post-fix
+audit is pending. All twenty historical cells improve Acc@task by $+0.97$ to
+$+4.57$ and Acc@1 by $+0.59$ to $+3.58$, against baseline Acc@1 of $31.8$--$93.8$.
+Historically, final accuracy on earlier tasks rises in every cell ($+1.83$ on
+average), versus $+1.58$ at learning time. Backward, their difference, worsens
+in five cells: learning-time accuracy rose more, not final accuracy less.
+This decomposition is descriptive and awaits post-fix confirmation.
 
 \subsection{Ablation}
 \label{sec:ablation}
@@ -736,10 +735,14 @@ from $68.47$ to $74.02$. We report differences between specified variants.
 Each stage alone beats the baseline on every backbone --- routing by $+0.29$ to
 $+0.73$, the classifier by $+0.51$ to $+3.07$. Adding routing to ungated class
 fusion changes Acc@1 by $-0.07$ to $+0.02$. This does not establish equivalent
-variants. Gated class-only controls were not located for the four SSL backbones,
-so we cannot attribute a five-backbone gain to routing with the gate active.
+variants. These ungated five-backbone ranges remain historical.
 The classifier-only gain is smallest on Sup-21K, $+0.51$ against $+2.23$ to
 $+3.07$ elsewhere.
+
+Post-fix full-minus-gated-class-only Acc@1 is $+0.13$, $+0.29$, $+0.78$,
+$+0.43$ and $+0.77$ on Sup-21K, MoCo-v3, iBOT-1K, iBOT-21K and DINO at seed $42$.
+These single-seed gains establish neither reliability nor retention benefit:
+MoCo-v3 Forgetting rises from $3.44$ to $3.69$.
 
 \subsubsection{Conditional contributions over four seeds.}
 On all three datasets we ran ungated class-only fusion ($w = 1$, $\beta = 0.5$,
@@ -784,40 +787,38 @@ $w = 0.8$ & 75.12 & 75.50 & 75.27\\
 \end{tabular}
 \end{table}
 
-The grid favours $\beta=0.5$ at every $w$. At that $\beta$, Acc@1 spans $0.11$
-points, versus about one point for Acc@task; aggregate scores cannot identify
-which routing repairs improve classification or establish equivalent weights.
-The maximum is $w=0.6$, not the reported $0.7$. Across four seeds, $0.6$ gains
+The grid favours $\beta=0.5$ at every $w$; its maximum is $w=0.6$, not the
+reported $0.7$. At $\beta=0.5$, Acc@1 spans $0.11$ points, versus about one point
+for Acc@task. Across four seeds, $0.6$ gains
 $+0.332$ $[+0.143,+0.522]$ Acc@task and $+0.108$ $[-0.064,+0.280]$ Acc@1
 over $0.7$ with the gate and $\beta=0.5$; the Acc@1 sign reverses on seed 43.
-These are historical full-method logs, not a routing-only weight comparison.
-We retain the earlier routing-stage choice $w=0.7$
-for consistency, not as an established full-method optimum.
+This contrast and all nine cells were verified after the masking fix: final
+Acc@1 is unchanged, but some intermediate/retention values differ.
+These full-method comparisons establish neither equivalence nor routing-only
+optimality. We retain the earlier $w=0.7$ for consistency, not as a known optimum.
 
 \subsection{Limitations}
 \label{sec:limits}
 
-Design choices were explored on ImageNet-R, and CUB-200 also carries development
-experiments, so neither is an untouched holdout; CIFAR-100 tests transfer, but
-more seeds do not remove selection bias. CUB can also overlap ImageNet
-pre-training images~\cite{ref_cub}; overlap was not audited here.
-The twenty-cell grid, five-backbone ablation and joint weight grid are
-single-seed; the three-dataset conditional contrasts use four seeds.
-The conditional routing effect remains unresolved on CIFAR.
-Post-fix verification is incomplete as noted in Sect.~\ref{sec:setup}.
-We lack a same-protocol RanPAC comparison, a full log/config manifest for the
-historical grid, and cross-checkpoint verification of the fixed feature map.
-Quoted baselines use another implementation; our 5-Datasets result is below
-the published figure. We claim no consistent retention benefit or equivalence
-and have not measured phase-level costs or sample-level repair/harm counts.
+ImageNet-R and CUB informed development; neither is an untouched holdout.
+More seeds do not remove selection bias. CUB/pre-training overlap~\cite{ref_cub}
+was not audited. The grids and five-backbone ablation are single-seed; only
+the three-dataset contrasts use four seeds. The historical cross-dataset
+post-fix audit is incomplete, and CIFAR's conditional routing effect is unresolved.
+Same-feature RP-only reaches mean Acc@1 $69.89/88.80/87.26$ on
+ImageNet-R/CIFAR/CUB, below the full method, but is not a same-protocol RanPAC
+reproduction. Quoted baselines use another implementation; our 5-Datasets
+result is below the published figure. Retention benefit/equivalence remains
+unestablished; phase-level cost and sample repair/harm counts were not measured.
 
 \section{Conclusion}
 
 A fixed-feature RP head supports task-proposal and class fusion, with reported
 Acc@1 gains of $0.69$--$1.50$ points across three datasets. Routing adds little
 under ungated class fusion; gated contrasts are dataset-dependent and the
-negative CUB gate estimate is unresolved. Post-fix verification remains
-incomplete. Accuracy gains do not establish reduced forgetting.
+negative CUB gate estimate is unresolved. The main results have post-fix
+verification; the historical grid audit remains open.
+Accuracy gains do not establish reduced forgetting.
 
 %
 % Run-in form of the acknowledgment: the credits environment's heading skip
@@ -991,7 +992,7 @@ In: ICCV, pp.~9650--9660 (2021)
 
 \bibitem{ref_code}
 Trường, N.T., Thái, T.Q.: Two-stage fusion for PET-based continual learning:
-implementation, revision ee32564 (2026).
+implementation, paper-system revision 4989ab8 (2026).
 \url{https://github.com/Truong140206/Two-Stage-Fusion-for-PET-Based-Continual-Learning-}
 
 \end{thebibliography}

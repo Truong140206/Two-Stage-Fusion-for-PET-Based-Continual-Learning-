@@ -1,5 +1,68 @@
 # Checkpoint review — 2026-09-10
 
+## Current checkpoint — 2026-09-12
+
+Supersedes the pending-weight-grid/CUB/SSL notes below. The user's latest
+audit supplied all 40 historical logs (20 baseline/full cells), all with
+complete stage sequences but none with verification metadata. Historical
+completeness is not proof of post-fix provenance. Do not rerun the completed
+main n=4 runs, 48 controls or nine weight cells.
+
+The 3x3 weight grid is complete after the fix. Final Acc@1 is unchanged in
+all nine cells. At beta=.7, corrected Forgetting/Backward are:
+w=.6: 3.4364/-3.3817; w=.7: 3.4069/-3.3027; w=.8: 3.2889/-3.1995.
+Intermediate stages differ, including Loss from task2 onward. The pattern is
+consistent with masking changes, but old logs lack metadata; do not claim
+that cleaning alone is proven to cause every difference.
+
+Added tools/verify_paper_backbone_grid.py and 22 dependency-free tests:
+
+- Fixed four datasets x five backbones, seed42, identity(w=1,beta=0) and
+  full(w=.7,beta=.5). Historical baseline is NOT gated-class-only.
+- Checks all selected inputs/checkpoints before GPU execution. Supports
+  five-task/five-adapter 5-Datasets, and refuses missing/ambiguous ImageNet-A
+  splits rather than invoking the loader's destructive automatic splitting.
+- Reuses up to eight exact verified arms: Sup IMR/CIFAR identity/full, and
+  four IMR SSL full logs. Original driver commits are pinned, not trusted
+  from the log itself. Up to32 new evaluations if all eight are reusable.
+- Checks saved configuration, strict exemplar-free protocol, source hash,
+  actual frozen feature tensors, checkpoint hashes and mutation stamps.
+- No training/checkpoint writes, no weight search, no log overwrites.
+  Single-runner lock and16GiB free-GPU guard; stops without killing others.
+- Same-tag completed logs are reusable. Incomplete or mismatched logs are
+  preserved and block reuse; a failed evaluation requires investigating its
+  traceback, not modifying metadata or deleting the evidence.
+- Exports six final metrics, all stage rows, historical deltas, paired
+  full-minus-identity differences and summary JSON. Reconstructs old-task
+  final/learning-time means from three-decimal per-task summaries when
+  present and consistent; otherwise explicitly UNAVAILABLE, never inferred
+  from overall averages. No additional GPU run just for this decomposition.
+- Completion and historical agreement have separate markers: CHANGED
+  retention is not a failed evaluation and does not abort remaining cells.
+
+Local69 dependency-free tests PASS; no torch/GPU evaluation on Windows.
+The actual20-cell post-fix results still require the lab run. This runner
+does not verify the historical five-backbone ungated/routing-only ablation
+ranges; those remain explicitly historical in the paper. Same-feature
+RP-only is not relabelled as a full RanPAC reproduction.
+
+Canonical reports/lncs_method_en.tex and .pdf updated in place:
+main/CUB and fixed-feature audits complete, five-backbone gated controls now
+reported, RP-only means included, nine-cell verification described without
+claiming unchanged retention. Historical grid conclusions remain qualified.
+Code reference now names paper-system revision4989ab8, not pre-fix ee32564.
+No algorithm changes; backup tag system-baseline-2026-09-11 remains intact.
+XeLaTeX compiled twice;12 content pages +2 reference pages, embedded fonts,
+no undefined references/missing glyphs/overfull or underfull boxes; existing
+amsmath vec warning remains. Changed content pages9–12 visually checked.
+Live Overleaf and the full final-submission audit are not certified by this.
+
+Lab (current local branch clean-code): git pull --ff-only origin main,
+then pytest and tools/verify_paper_backbone_grid.py --run, with the existing
+output/data roots. Default tag paper_backbone_verify_v1. The JSON is written
+under the output root as:
+paper_backbone_verify_v1__imr-cifar100-ima-fivedatasets__summary.json.
+
 ## Paper system restored after exploratory trials - 2026-09-11
 
 User stopped algorithm improvements and requested the paper system back.
