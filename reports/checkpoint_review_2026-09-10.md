@@ -1,5 +1,25 @@
 # Checkpoint review — 2026-09-10
 
+## MoCo completion and separate system experiments - 2026-09-11
+
+User supplied MoCo seed42 class_gate/full with all10 stages, EVIDENCE_FINAL,
+FIXED_FEATURE_TENSORS=PASS, CHECKPOINT_PROTOCOL=PASS and
+SOICT_EVIDENCE_COMPLETE=ssl:mocov3. Lab111tests PASS. Source SHA is unchanged
+from the46-run batch. This closes48/48 priority evaluations, not the historical
+20-cell grid or phase/sample-level audits. The46/48 notes below are historical.
+
+MoCo class_gate/full: Acc@1 70.0789/70.3653, Acc@task73.8206/76.7719,
+Acc@5 83.8112/83.7096, Loss1.7932/1.7808, Forgetting3.4351/3.6900,
+Backward-3.3851/-3.6090. Routing adds+.2864 Acc@1 but worsens Acc@5/retention.
+All five ImageNet-R backbone conditional Acc@1 contrasts are positive at
+seed42; this is not multi-seed statistical evidence for the four SSL backbones.
+
+User authorized system experiments only after a recovery point. The pushed tag
+system-baseline-2026-09-11 preserves4989ab8 code and paper. New opt-in routing,
+gate-floor and M5000 probes are documented in fusion_experiments.md; they are
+not paper results. Default formulas remain unchanged; no new GPU runs locally.
+Local52 tests PASS and5 torch tests skipped. Paper/source PDF unchanged.
+
 ## Results received and MoCo audit correction — 2026-09-11 (latest)
 
 Attachment c0e6208c-3f0b-4597-bc22-f018d4290da9 contains the complete run
