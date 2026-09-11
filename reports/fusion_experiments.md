@@ -1,5 +1,23 @@
 # Opt-in fusion probes - 2026-09-11
 
+## Archived - restored paper system
+
+The user stopped this direction and requested restoration. Experimental source,
+flags, runner and tests have been removed from the active tree; they remain
+recoverable in commit b9d8def8aec715c6fbae8920c39420a1e912306e. Do not run the
+historical commands below on the restored main branch. No lab logs were deleted.
+Code/configs are restored byte-for-byte in Git to system-baseline-2026-09-11.
+Paper LaTeX/PDF were never modified during the probes.
+
+Final exploratory route_class_zmax minus paper-reference Acc@1 (four seeds):
+ImageNet-R +.161675 CI[.104251,.219099]; CIFAR -.012500
+CI[-.060015,.035015]; CUB +.030550 CI[-.028169,.089269]. All six retention
+intervals contain zero. Lab127tests passed before rollback. All12 references
+matched their original ten-stage logs, and both dataset batches completed.
+Only the original paper method remains active; no per-dataset winner selection.
+
+The rest of this document records the historical experimental implementation.
+
 ## Recovery point
 
 `system-baseline-2026-09-11` is an annotated Git tag at

@@ -1,5 +1,37 @@
 # Checkpoint review — 2026-09-10
 
+## Paper system restored after exploratory trials - 2026-09-11
+
+User stopped algorithm improvements and requested the paper system back.
+Configs/engines/trainers/vits/peft/dataset source now match the immutable
+system-baseline-2026-09-11 tag (4989ab8) in Git. The three experimental source,
+runner and test files are removed from the active tree; recover them from
+b9d8def if needed. No lab logs, checkpoints, datasets or untracked files deleted.
+Canonical LaTeX/PDF hashes remain identical to the tag, not overwritten.
+
+Exploratory route trials completed all3 datasets/four seeds; all12 reference
+runs matched all10 stages of the original paper. Lab127tests passed before
+restoration. These results are archived in fusion_experiments.md, not adopted
+as paper-method results. Current local47 dependency-free tests PASS after
+restoration, including6 new weight-grid runner guards. No local torch/GPU run.
+
+The paper's main n=4 results, identity checks, fixed-feature audits and48
+priority control evaluations are already covered. Do not rerun those GPU jobs.
+Remaining verification: seven of nine joint-weight cells at ImageNet-R seed42;
+the historical20-cell cross-dataset/pretraining grid and historical ungated/
+routing-only ablations need provenance mapping beyond the completed controls.
+Phase-level cost and sample repair/harm are optional additional measurements,
+not supplied by these runners. Stale CUB/SSL/fixed-feature pending prose in the
+unchanged paper must eventually be synchronized with existing evidence.
+
+Added tools/verify_paper_weight_grid.py: fixed existing9-cell table only,
+reuses the two verified cells with exact metadata (original74ff5c9 driver for
+w=.6), evaluates7 with --run, preserves old logs, and checks historical values.
+No model code changes. Restored Linux evaluator must have source digest
+6747fed54a6f9679632bfdbbed1d3ebf2832dc801cf950b6164460f5a8858da9;
+raw Windows line endings can differ, so local restoration was checked in Git.
+Use a new paper_grid_verify_v1 log tag. It is not a parameter-selection sweep.
+
 ## MoCo completion and separate system experiments - 2026-09-11
 
 User supplied MoCo seed42 class_gate/full with all10 stages, EVIDENCE_FINAL,

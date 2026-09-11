@@ -767,25 +767,8 @@ def fuse_routers(rp_scores, tii_logits, class_mask, seen_task_count, args,
         return centered / centered.std(
             dim=1, unbiased=False, keepdim=True).clamp_min(1e-6)
 
-    score_mode = getattr(args, 'rp_route_score_mode', 'task_z')
-    if score_mode == 'task_z':
-        # Keep this default expression identical to the verified baseline.
-        fused = (weight * standardize(tii_task)
-                 + (1.0 - weight) * standardize(rp_task))
-    elif score_mode == 'class_zmax':
-        # With two tasks, task-wise z scores are +/-1, losing the margin.
-        # Standardize over ALL seen classes instead, then take each task max.
-        # No held-out fitting, probability calibration, or accuracy guarantee.
-        seen_classes = [int(c) for mask in class_mask[:seen_task_count] for c in mask]
-        valid = torch.zeros_like(tii_logits, dtype=torch.bool)
-        valid[:, seen_classes] = True
-        def class_task_scores(scores):
-            z = _standardize_valid(torch.nan_to_num(scores.float(), neginf=0.0), valid)
-            return _task_scores_from_class_scores(z, class_mask, seen_task_count, device)
-        fused = (weight * class_task_scores(tii_logits)
-                 + (1.0 - weight) * class_task_scores(rp_scores))
-    else:
-        raise ValueError('Unknown rp_route_score_mode: ' + str(score_mode))
+    fused = (weight * standardize(tii_task)
+             + (1.0 - weight) * standardize(rp_task))
     layer_weight = float(getattr(args, 'rp_route_fusion_ls_weight', 0.0))
     if layer_scores is not None and layer_weight != 0.0:
         # Weak on its own (48.5 on ImageNet-R) but its errors barely overlap the
@@ -938,14 +921,6 @@ def fuse_class_scores(routed_logits, rp_scores, weight, seen_tasks=None):
         routed, valid,
         getattr(args_ref[0], 'rp_class_fusion_gate', 'none'),
         rp_scores=torch.nan_to_num(rp_scores.float(), neginf=-1e4))
-    floor = float(getattr(args_ref[0], 'rp_class_gate_floor', 0.0))
-    if not math.isfinite(floor) or not 0.0 <= floor <= 1.0:
-        raise ValueError('rp_class_gate_floor must be finite and in [0, 1]')
-    if floor != 0.0:
-        if getattr(args_ref[0], 'rp_class_fusion_gate', 'none') != 'margin':
-            raise ValueError('Nonzero rp_class_gate_floor requires margin gate')
-        gate = floor + (1.0 - floor) * gate
-        gate_stats['gate'] = gate.mean().item()
     share = weight if gate is None else weight * gate
     mixed = ((1.0 - share) * _standardize_valid(routed, valid)
              + share * _standardize_valid(

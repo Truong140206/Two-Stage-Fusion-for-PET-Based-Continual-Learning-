@@ -1,7 +1,5 @@
 
 def get_args_parser(subparsers):
-    from configs.fusion_experiments import add_fusion_experiments
-    add_fusion_experiments(subparsers)
     subparsers.add_argument('--batch-size', default=24, type=int, help='Batch size per device')
     subparsers.add_argument('--epochs', default=5, type=int)
 
