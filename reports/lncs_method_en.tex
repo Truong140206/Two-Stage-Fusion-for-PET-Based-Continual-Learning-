@@ -114,8 +114,8 @@ fusion before re-matching and gated class fusion afterwards. The head is fitted
 in closed form without gradient descent. A three-dataset, four-seed study
 separates gains in routing/classification from unresolved retention effects.
 Conditional ablations and weight comparisons examine what each operation adds.
-We also report a historical four-dataset by five-pretraining grid, with its
-verification limits stated in Sect.~\ref{sec:exp}.
+We also verify a four-dataset by five-pretraining grid after the masking fix,
+with its remaining limitations stated in Sect.~\ref{sec:exp}.
 
 \section{Related Work}
 \label{sec:related}
@@ -606,7 +606,7 @@ logged precision at every stage for all three datasets and seeds 42--45.
 For example, ImageNet-R seed 42 gives Acc@task $77.7914$, Acc@1 $74.0191$ and
 Loss $1.2305$. Main runs, four-seed controls and the joint weight grid were
 re-evaluated. Backbone/first-adapter feature tensors match across checkpoints
-in all twelve main and four SSL runs; the historical cross-dataset audit is pending.
+in all main/grid checkpoint sets; all forty grid evaluations are verified.
 
 \subsection{Main Results}
 \label{sec:results}
@@ -670,7 +670,7 @@ All six paired retention intervals include zero. Corrected CIFAR Forgetting is
 $-0.150$ $[-0.302,+0.002]$ and Backward $+0.136$ $[-0.015,+0.287]$.
 These related metrics are not independent confirmations. Neither consistent
 improvement nor equivalence is established: four seeds leave substantial
-uncertainty, and no equivalence margin was specified. The historical
+uncertainty, and no equivalence margin was specified. The
 single-seed decomposition in Sect.~\ref{sec:grid} is descriptive.
 
 \subsection{Placement Against Prior Methods}
@@ -717,13 +717,14 @@ comparison remains the paired baseline--full difference in Table~\ref{tab:main}.
 \subsection{The Full Grid}
 \label{sec:grid}
 
-The historical $4\times5$ grid uses one code path at seed $42$; its post-fix
-audit is pending. All twenty historical cells improve Acc@task by $+0.97$ to
+The $4\times5$ grid uses one code path at seed $42$. Post-fix verification of all
+forty evaluations reproduces final accuracy and Loss; ten full-method runs
+have changed retention values. All twenty cells improve Acc@task by $+0.97$ to
 $+4.57$ and Acc@1 by $+0.59$ to $+3.58$, against baseline Acc@1 of $31.8$--$93.8$.
-Historically, final accuracy on earlier tasks rises in every cell ($+1.83$ on
+Verified final accuracy on earlier tasks rises in every cell ($+1.83$ on
 average), versus $+1.58$ at learning time. Backward, their difference, worsens
 in five cells: learning-time accuracy rose more, not final accuracy less.
-This decomposition is descriptive and awaits post-fix confirmation.
+This decomposition uses rounded per-task logs and remains descriptive.
 
 \subsection{Ablation}
 \label{sec:ablation}
@@ -732,12 +733,11 @@ The five-backbone ImageNet-R ablation uses seed $42$; baseline Acc@1 ranges
 from $68.47$ to $74.02$. We report differences between specified variants.
 
 \subsubsection{Routing with ungated class fusion.}
-Each stage alone beats the baseline on every backbone --- routing by $+0.29$ to
-$+0.73$, the classifier by $+0.51$ to $+3.07$. Adding routing to ungated class
-fusion changes Acc@1 by $-0.07$ to $+0.02$. This does not establish equivalent
-variants. These ungated five-backbone ranges remain historical.
-The classifier-only gain is smallest on Sup-21K, $+0.51$ against $+2.23$ to
-$+3.07$ elsewhere.
+Historical routing-only and ungated class-only variants improve Acc@1 on each
+backbone by $+0.29$--$+0.73$ and $+0.51$--$+3.07$, respectively.
+Adding routing to ungated class fusion changes Acc@1 by $-0.07$ to $+0.02$,
+not establishing equivalence. These five-backbone ranges remain historical;
+the smallest class-only gain ($+0.51$) is on Sup-21K.
 
 Post-fix full-minus-gated-class-only Acc@1 is $+0.13$, $+0.29$, $+0.78$,
 $+0.43$ and $+0.77$ on Sup-21K, MoCo-v3, iBOT-1K, iBOT-21K and DINO at seed $42$.
@@ -745,11 +745,10 @@ These single-seed gains establish neither reliability nor retention benefit:
 MoCo-v3 Forgetting rises from $3.44$ to $3.69$.
 
 \subsubsection{Conditional contributions over four seeds.}
-On all three datasets we ran ungated class-only fusion ($w = 1$, $\beta = 0.5$,
-no gate), the same with the margin gate, and the full method, at seeds 42--45.
-Full minus gated class-only measures routing conditional on gated class fusion;
-gated minus ungated class-only measures the gate without routing fusion.
-These are conditional contrasts, not independent stage effects.
+For all three datasets and seeds 42--45, class-only fusion uses $w=1$,
+$\beta=0.5$, with or without the margin gate. Full minus gated class-only
+measures conditional routing; gated minus ungated class-only measures the gate
+without routing fusion. These are not independent stage effects.
 
 The conditional routing effect is $+0.083$ $[+0.026, +0.140]$ on ImageNet-R, $-0.030$
 $[-0.085, +0.025]$ on CIFAR-100 and $+0.156$ $[+0.055, +0.257]$ on CUB-200. The
@@ -803,21 +802,21 @@ optimality. We retain the earlier $w=0.7$ for consistency, not as a known optimu
 ImageNet-R and CUB informed development; neither is an untouched holdout.
 More seeds do not remove selection bias. CUB/pre-training overlap~\cite{ref_cub}
 was not audited. The grids and five-backbone ablation are single-seed; only
-the three-dataset contrasts use four seeds. The historical cross-dataset
-post-fix audit is incomplete, and CIFAR's conditional routing effect is unresolved.
+the three-dataset contrasts use four seeds. Ungated five-backbone ablations
+remain historical, and CIFAR's conditional routing effect is unresolved.
 Same-feature RP-only reaches mean Acc@1 $69.89/88.80/87.26$ on
 ImageNet-R/CIFAR/CUB, below the full method, but is not a same-protocol RanPAC
 reproduction. Quoted baselines use another implementation; our 5-Datasets
 result is below the published figure. Retention benefit/equivalence remains
 unestablished; phase-level cost and sample repair/harm counts were not measured.
+Preflight reported two unreadable NotMNIST images, which the loader skips.
 
 \section{Conclusion}
 
-A fixed-feature RP head supports task-proposal and class fusion, with reported
-Acc@1 gains of $0.69$--$1.50$ points across three datasets. Routing adds little
-under ungated class fusion; gated contrasts are dataset-dependent and the
-negative CUB gate estimate is unresolved. The main results have post-fix
-verification; the historical grid audit remains open.
+A fixed-feature RP head supports task-proposal and class fusion, gaining
+$0.69$--$1.50$ Acc@1 points across three datasets. Gated routing effects are
+dataset-dependent; the negative CUB gate estimate remains unresolved.
+Main results and the cross-dataset grid have post-fix verification.
 Accuracy gains do not establish reduced forgetting.
 
 %

@@ -1,5 +1,98 @@
 # Checkpoint review — 2026-09-10
 
+## Completed backbone grid — 2026-09-12, latest
+
+User supplied paper_backbone_finish_HbWdK6.log in attachment
+d6559399-1b00-4423-9148-8b6cafde7d87. Independently parsed40 distinct
+records from the transcript with SHA256
+1de722a0bf7ba3cd24291bb6b83e0e0a24aa3d882614e3ce604fa06031f63887.
+The transcript contains40 distinct
+BACKBONE_GRID_FINAL records,32 RUN lines and complete5/10-stage sequences.
+Preflight reused8 verified arms; all20 checkpoint protocol/fixed-feature
+checks PASS. Evaluator SHA remains
+6747fed54a6f9679632bfdbbed1d3ebf2832dc801cf950b6164460f5a8858da9.
+PAPER_BACKBONE_GRID_COMPLETE=20/20; HISTORICAL_FINAL_CORE=PASS;
+HISTORICAL_RETENTION=CHANGED; shell reports Done. This batch is finished:
+do not rerun it or ask the user for the same summary merely to confirm it.
+The transcript includes the needed per-arm JSON and final summaries.
+
+All40 final Acc@task/Acc@1/Acc@5/Loss values match history. Ten full arms
+have retention differences; all20 identity arms retain all six final values.
+This does NOT mean all intermediate metrics or retention were unchanged.
+Nor does it prove that every historical difference came only from cleanup.
+
+Corrected full-method Forgetting/Backward in changed arms:
+
+| Dataset / backbone | Forgetting | Backward |
+|---|---:|---:|
+| IMR / iBOT-1K | 3.5577 | -3.5577 |
+| IMR / iBOT-21K | 3.8695 | -3.8385 |
+| IMR / DINO | 2.8626 | -2.7592 |
+| CIFAR100 / Sup | 3.6778 | -3.6778 |
+| IMA / Sup | 5.5603 | -5.1497 |
+| IMA / iBOT-21K | 5.4401 | -5.1042 |
+| IMA / DINO | 5.2178 | -4.9455 |
+| 5-Datasets / MoCo-v3 | 0.2950 | -0.2525 |
+| 5-Datasets / iBOT-21K | 0.5634 | -0.3359 |
+| 5-Datasets / DINO | 0.5099 | -0.3124 |
+
+Post-fix seed42 grid, deltas full minus identity, percentage points.
+Lower delta Forgetting and higher delta Backward are better:
+
+| Dataset / backbone | Identity Acc@1 | Full Acc@1 | Delta Acc@1 | Delta F | Delta B |
+|---|---:|---:|---:|---:|---:|
+| imr / sup | 74.0191 | 75.5116 | 1.4925 | -0.2301 | 0.0935 |
+| imr / mocov3 | 68.4719 | 70.3653 | 1.8934 | 0.5871 | -0.7760 |
+| imr / ibot1k | 71.8881 | 74.4126 | 2.5245 | -0.8791 | 0.8791 |
+| imr / ibot21k | 73.2909 | 75.8404 | 2.5495 | -0.3724 | 0.4034 |
+| imr / dino | 70.2347 | 72.9140 | 2.6793 | -0.5769 | 0.5211 |
+| cifar100 / sup | 89.7700 | 90.5300 | 0.7600 | -0.2778 | 0.2555 |
+| cifar100 / mocov3 | 85.5000 | 87.6200 | 2.1200 | -0.2444 | 0.2112 |
+| cifar100 / ibot1k | 86.4600 | 88.5200 | 2.0600 | -0.8000 | 0.7556 |
+| cifar100 / ibot21k | 88.5200 | 90.3200 | 1.8000 | -0.6000 | 0.6000 |
+| cifar100 / dino | 85.3600 | 87.3900 | 2.0300 | -0.8222 | 0.7889 |
+| ima / sup | 45.8519 | 47.4201 | 1.5682 | -1.0518 | 0.2827 |
+| ima / mocov3 | 31.7988 | 34.2100 | 2.4112 | 0.0462 | 0.1165 |
+| ima / ibot1k | 37.0770 | 40.6572 | 3.5802 | 0.3877 | -0.3175 |
+| ima / ibot21k | 41.4776 | 44.1051 | 2.6275 | -1.1901 | 1.1515 |
+| ima / dino | 36.4376 | 37.4075 | 0.9699 | 1.8988 | -1.8964 |
+| fivedatasets / sup | 91.3703 | 93.7699 | 2.3996 | -1.2229 | 1.2604 |
+| fivedatasets / mocov3 | 92.6277 | 94.0418 | 1.4141 | -0.6683 | 0.7108 |
+| fivedatasets / ibot1k | 93.7977 | 94.6477 | 0.8500 | -0.0532 | -0.1761 |
+| fivedatasets / ibot21k | 93.8320 | 94.4203 | 0.5883 | 0.1661 | -0.0836 |
+| fivedatasets / dino | 92.5238 | 93.2712 | 0.7474 | -0.0769 | 0.1199 |
+
+Retention reconstruction PASS_ROUNDED_3DP for40/40 arms,20/20 pairs.
+Full-minus-identity final accuracy on old tasks improves in20/20 cells,
+mean1.8278972222; learning-time old-task mean improves1.5828958333.
+Their difference is about+.2450 Backward. Both paper rounded means+1.83/+1.58
+remain supported after the fix. Backward worsens in5/20 cells; Forgetting
+also worsens in5/20, not the identical set. These are descriptive single-seed
+results, not20 independent replications or evidence of universal retention gain.
+
+Preflight warnings: NumPy alignment deprecation; non-writable NumPy tensor
+warning; two unreadable NotMNIST images:
+F/Q3Jvc3NvdmVyIEJvbGRPYmxpcXVlLnR0Zg==.png and
+A/RGVtb2NyYXRpY2FCb2xkT2xkc3R5bGUgQm9sZC50dGY=.png.
+The NotMNIST loader catches image-loading failures and skips these samples.
+No data was repaired/replaced/deleted. Final-core agreement supports
+reproducibility of the current pipeline, NOT completeness of the source
+dataset or proof that these omissions have zero impact. The transcript does
+not identify Train/Test for these warnings. Preserve the prepared split.
+
+Paper updated in place to close grid pending statements, retain corrected
+retention interpretation and disclose the NotMNIST caveat. Model/driver code
+unchanged, so source/driver metadata for completed runs remain reusable.
+Still open separately: historical ungated/routing-only five-backbone ranges,
+unmeasured phase costs/sample repair-harm and same-protocol RanPAC reproduction.
+None is solved merely by the20-cell identity/full verification.
+
+PDF QA: final XeLaTeX build twice PASS; content and acknowledgment end on
+page12, References start on13 (14 PDF pages total). Changed pages2,9–12
+rendered and visually checked, no overlap/clipping. No undefined references,
+missing glyphs or over/underfull boxes; existing amsmath vec warning only.
+No model-code changes or new local GPU run in this synchronization.
+
 ## Current checkpoint — 2026-09-12
 
 Supersedes the pending-weight-grid/CUB/SSL notes below. The user's latest
