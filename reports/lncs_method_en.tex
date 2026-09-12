@@ -258,6 +258,8 @@ deviation floored at $10^{-6}$.
 \definecolor{ip}{RGB}{111,79,156}%
 \definecolor{io}{RGB}{194,105,32}%
 \definecolor{ir}{RGB}{172,63,99}%
+% Fit the padded outer frame to the column; preserve all internal proportions.
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[x=1cm,y=1cm,
   font=\fontsize{8}{9}\selectfont,
   arr/.style={-{Stealth[length=1.5mm]},line width=.6pt,draw=ib},
@@ -405,7 +407,13 @@ deviation floored at $10^{-6}$.
 \pic at (10.84,1.44) {matrix={ip/$W_{\rm out}$}};
 % Parameter reuse is labelled rather than threaded through the diagram's lanes.
 \node[tinylabel,text=ip] at (10.84,2.14) {used in (a)};
+% One quiet frame groups inference and fitting; the caption remains outside.
+\begin{scope}[on background layer]
+  \node[draw=black!40,line width=.5pt,rounded corners=3pt,
+        inner sep=6pt,outer sep=0pt,fit=(current bounding box)] {};
+\end{scope}
 \end{tikzpicture}
+}
 \caption{Two-stage fusion. All inference passes use the same image; adapted
 passes share head $g$. TII selects $t_0$; the projection $W$ is frozen.
 Stage 1 standardises task-wise maxima of $r$ and $s$;
