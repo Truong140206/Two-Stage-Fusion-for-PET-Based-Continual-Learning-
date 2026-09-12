@@ -162,7 +162,7 @@ but requires current-task data to fit the RP head.
 \label{sec:baseline}
 
 We use the released HRM-PET~\cite{ref_hrmpet} inference path. The seed-$42$
-diagnostics below are historical, not yet independently post-fix verified;
+routing and classifier-overlap diagnostics below have post-fix verification;
 they use equal task weights, as in Sect.~\ref{sec:setup}.
 
 \subsubsection{Task-identity inference (TII).}
@@ -208,7 +208,7 @@ compares bare TII with RP rather than the actual Stage 1 inputs.
 A better route need not become a better prediction: $\ell$ comes from the shared
 head, which spans every class seen so far, so a mis-routed sample can be
 classified correctly anyway. The RP head is moreover a complete classifier that
-a routing-only variant would discard: in the historical routing-only diagnostic
+a routing-only variant would discard: in the verified routing-only diagnostic
 ($w=0.7$, $\beta=0$) on ImageNet-R, the routed head reaches
 $74.31\%$ and the projection head $70.08\%$, yet their union is $78.89\%$, the
 head alone contributing $4.58$ task-balanced points and $2.43$ and $3.87$ on
@@ -812,7 +812,8 @@ Same-feature RP-only reaches mean Acc@1 $69.89/88.80/87.26$ on
 ImageNet-R/CIFAR/CUB, below the full method, but is not a same-protocol RanPAC
 reproduction. Quoted baselines use another implementation; our 5-Datasets
 result is below the published figure. Retention benefit/equivalence remains
-unestablished; phase-level cost and sample repair/harm counts were not measured.
+unestablished; phase-level cost and actual full-fusion repair/harm counts
+were not measured.
 The loader skips two zero-byte NotMNIST training files, also empty in the
 local source archive; we did not replace them.
 
@@ -821,7 +822,8 @@ local source archive; we did not replace them.
 A fixed-feature RP head supports task-proposal and class fusion, gaining
 $0.69$--$1.50$ Acc@1 points across three datasets. Gated routing effects are
 dataset-dependent; the negative CUB gate estimate remains unresolved.
-Main results, ablations and the cross-dataset grid have post-fix verification.
+Main results, oracle diagnostics, ablations and the cross-dataset grid have
+post-fix verification.
 Accuracy gains do not establish reduced forgetting.
 
 %

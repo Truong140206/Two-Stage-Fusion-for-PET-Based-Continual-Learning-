@@ -1,5 +1,66 @@
 # Checkpoint review — 2026-09-10
 
+## Oracle diagnostics COMPLETE — 2026-09-13 (current checkpoint)
+
+User transcript attachment 2a427381-9759-438e-b533-46ebd1835496, SHA256:
+b06a75a0fff8f5210023bfeb6435ecad1ddf169f54b91fa614a2bccdbf19f801.
+PAPER_DIAGNOSTICS_COMPLETE=6/6 and shell Done. Six new runs, zero reused;
+all six have ten unique stage summaries. Three checkpoint/fixed-feature checks
+PASS; evaluator source remains 6747fed54a6f9679632bfdbbed1d3ebf2832dc801cf950b6164460f5a8858da9.
+Local independent parsing reproduced the six final records, validated every
+stage's overlap identities, checked cross-branch final RP accuracy and confirmed
+all 13 quoted diagnostic values match at the paper's rounding precision.
+No JSON resubmission or repeat evaluation is needed to confirm the same data.
+
+Task-balanced routing diagnostics, seed42 (percent):
+
+| Dataset | Bare TII | RP router | Oracle union | RP-correct/TII-wrong | Recovery ratio |
+|---|---:|---:|---:|---:|---:|
+| ImageNet-R | 63.7955 | 77.1248 | 82.9929 | 19.1973 | 53.024624 |
+| CIFAR-100 | 81.2100 | 89.5100 | 92.8600 | 11.6500 | 62.001064 |
+| CUB-200 | 92.9614 | 94.0157 | 96.2626 | 3.3012 | 46.901372 |
+
+Classifier diagnostics in routing-only w=.7, beta=0, gate=none (percent):
+
+| Dataset | Routed head | RP head | Oracle union | RP correct / routed wrong |
+|---|---:|---:|---:|---:|
+| ImageNet-R | 74.3112 | 70.0796 | 78.8862 | 4.5750 |
+| CIFAR-100 | 89.9700 | 88.7600 | 92.4000 | 2.4300 |
+| CUB-200 | 86.4795 | 87.4991 | 90.3529 | 3.8733 |
+
+Verified baseline DRM-proposal accuracies are 77.7914 / 89.8200 / 93.2098.
+All four available non-instrumented controls match all stages and six metrics:
+three RP-only controls and ImageNet-R routing-only. The two other routing-only
+diagnostic runs have verified provenance/overlap consistency but no corresponding
+non-instrumented all-stage comparison in this batch; do not claim six such PASSes.
+
+Final diagnostic-run retention (F / B), not full-method main-table values:
+
+| Dataset | RP-only | Routing-only |
+|---|---:|---:|
+| ImageNet-R | 4.4617 / -4.4617 | 3.2155 / -2.8676 |
+| CIFAR-100 | 4.4667 / -4.4667 | 3.6444 / -3.6222 |
+| CUB-200 | 1.9987 / -1.9240 | 2.4215 / -2.3286 |
+
+Updated the same canonical TeX/PDF: removed pending/historical qualifiers for
+the now-verified oracle diagnostics, kept all numerical values unchanged,
+and clarified that the unmeasured repair/harm limitation concerns actual full
+fusion, not oracle overlap. No model/config/driver changes, training or tuning.
+XeLaTeX compiled twice; 12 content pages plus 2 reference-only pages.
+Visual QA of changed pages 3, 4 and 12 PASS; reference/citation keys resolve,
+no missing glyph/image or overfull/underfull warnings. The existing amsmath
+vec warning is nonfatal. Local build only, not a live Overleaf test.
+
+Required result-verification queue is now EMPTY for the current paper scope:
+main results, 48 controls, 9 weight cells, 20 grid cells, 15 ungated ablations,
+and these 6 diagnostic arms are complete. The earlier "last required batch"
+section below is historical and must not trigger another run.
+This does not certify every possible benchmark or eliminate the stated
+limitations: single-seed diagnostics, development/test selection, unmeasured
+phase/peak cost, historical 283 s timing, no same-protocol RanPAC reproduction,
+and no actual full-fusion per-image repair/harm attribution remain explicit.
+No inference of improved forgetting from these oracle results.
+
 ## Closure audit and last required diagnostic batch — 2026-09-12
 
 Current paper/code status:
