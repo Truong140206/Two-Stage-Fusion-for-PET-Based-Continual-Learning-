@@ -1,5 +1,88 @@
 # Checkpoint review — 2026-09-10
 
+## Closure audit and last required diagnostic batch — 2026-09-12
+
+Current paper/code status:
+
+- Local dependency-free verification suite: 88 tests PASS (9 new diagnostic
+  tests). This is not a claim of local torch/GPU evaluation.
+
+- Main results, 48 controls, 9 weight cells, 20 grid cells and 15 ungated
+  ablations are complete. Do NOT rerun these batches.
+- Algorithm/evaluator/config files remain identical to the pushed
+  system-baseline-2026-09-11 tag (4989ab8). Existing verification drivers are
+  unchanged, so their completed log provenance remains reusable.
+- Fixed the historical oracle paragraph: all quoted rates use equal task
+  weights. Recovery is a ratio of task-balanced rates, NOT pooled image counts
+  or an average of per-task conditional ratios. Removed unsupported wording
+  that all analytic methods "discard routing"; softened unmeasured frequency
+  claims. Historical numbers remain visible, explicitly pending verification.
+- Pipeline now floats at the top of a text page instead of a half-empty
+  figure-only page. No image/font scaling or margin manipulation.
+- XeLaTeX twice; 12 content pages plus 2 reference-only pages. Fonts embedded,
+  mallard is genuine JPEG, all citation/ref keys resolve, no missing glyphs or
+  overfull/underfull warnings. Existing amsmath vec warning is nonfatal.
+- Rechecked official SOICT rules on 2026-09-12:
+  https://soict.org/submission/paper-submission/
+  12 pages excluding references, Springer CCIS/LNCS, single-blind with author
+  identities, no page numbers, full-paper deadline 16 September 2026.
+- Quoted Sup-21K baseline rows match the primary HRM-PET Table 1:
+  https://papers.nips.cc/paper_files/paper/2025/file/a978bdfeb195e4a574c0def98806346a-Paper-Conference.pdf
+  Photo attribution/public-domain record also rechecked:
+  https://commons.wikimedia.org/wiki/File:Mallard_duck_.jpg
+
+Required before declaring every current numerical diagnostic verified:
+
+`tools/verify_paper_diagnostics.py`: 3 datasets x 2 diagnostic arms, seed42.
+The RP-only branch emits RouteTII/RP/Union/Both/Agree/RPOnly; routing-only
+emits ClsRouted/RP/Union/RPOnly. These counters exist in different evaluator
+branches: one run with both flags would NOT measure both. The completed
+aggregate runs did not request these counters, hence six instrumented runs
+are justified; this is not a new ablation or hyperparameter search.
+
+Preflight pins restored source, all 60 checkpoint files, fixed features,
+existing main baseline provenance, 3 RP-only control logs and the verified IMR
+route-only arm. It compares all stages with those four non-instrumented
+controls, validates overlap identities, compares the RP classifier across both
+branches, and prints measured-versus-quoted values. UPDATE_PAPER means update
+historical diagnostic numbers, not discard new evidence or tune parameters.
+No --run means no GPU evaluation. Reuses its own completed logs; exclusive
+new logs, shared verifier lock and >=16 GiB free GPU required. No training,
+checkpoint writes, dataset changes, or modification of previous drivers.
+
+Full lab command (run when the shared GPU is available):
+
+```bash
+cd /home/s24gbn1/Documents/truongnguyen/clean-check || exit
+git pull --ff-only origin main || exit
+PY=/home/s24gbn1/Documents/truongnguyen/Hybrid_ReMatching/.venv/bin/python
+OUT=/home/s24gbn1/Documents/truongnguyen/hrm-pet-output
+"$PY" -m pytest tests/ -q || exit
+LOG=$(mktemp "$OUT/paper_diagnostics_finish_XXXXXX.log") || exit
+nohup "$PY" -u tools/verify_paper_diagnostics.py \
+  --output-root "$OUT" \
+  --data-root /home/s24gbn1/Documents/truongnguyen/datasets \
+  --tag paper_diagnostics_verify_v1 \
+  --run >"$LOG" 2>&1 &
+JOB=$!
+printf 'PID=%s\nLOG=%s\n' "$JOB" "$LOG"
+tail -F --pid="$JOB" "$LOG"
+```
+
+Completion: PAPER_DIAGNOSTICS_COMPLETE=6/6. Summary:
+paper_diagnostics_verify_v1__summary.json. Not yet run on the lab GPU.
+
+Scope boundary: a same-protocol RanPAC reproduction, controlled phase/peak-cost
+benchmark and actual full-fusion sample repair/harm counts are further research,
+not missing runs for the existing accuracy/retention tables. The paper does
+not claim those measurements; its 283 s value remains explicitly historical,
+not a baseline-relative or phase-cost measurement. Do not relabel oracle overlap
+as actual Stage-1/Stage-2 repair. No automatic test-set tuning, new seed search,
+SSH job launch, dataset repairs or submission.
+Author approval of the final manuscript, author list, any competing-interest
+statement and actual EasyChair upload remain author actions. Live Overleaf
+compilation has NOT been tested; local XeLaTeX has.
+
 ## Completed ungated ablation — latest evidence,2026-09-12
 
 User supplied paper_ablation_finish_M6pkdC.log, attachment

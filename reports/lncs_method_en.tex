@@ -146,8 +146,8 @@ a ridge system.
 
 Our head belongs to this family and we claim no novelty in it: the projection,
 the Gram accumulation and the ridge solve are RanPAC's. What differs is its
-role. These methods use the closed-form classifier as the whole predictor and
-discard routing; we keep the routing pipeline and consult the solved head twice.
+role. Rather than using the solved head as the sole predictor, we retain the
+adapter-routing pipeline and consult the same head at two decision points.
 
 \subsubsection{Correcting the classifier after the fact.}
 Class-incremental learning often biases predictions towards recent
@@ -161,8 +161,9 @@ but requires current-task data to fit the RP head.
 \subsection{HRM-PET: The Baseline We Build On}
 \label{sec:baseline}
 
-We use the released HRM-PET~\cite{ref_hrmpet} inference path. Diagnostics quoted
-here are seed-$42$ measurements, separate from the evaluation of Sect.~\ref{sec:exp}.
+We use the released HRM-PET~\cite{ref_hrmpet} inference path. The seed-$42$
+diagnostics below are historical, not yet independently post-fix verified;
+they use equal task weights, as in Sect.~\ref{sec:setup}.
 
 \subsubsection{Task-identity inference (TII).}
 The input image is passed through the \emph{bare} backbone, with no adapter
@@ -196,20 +197,21 @@ with $-\infty$.
 The baseline draws its routing evidence from TII and the shared head alone. To
 see what a second source would be worth we built the head of
 Sect.~\ref{sec:rp} on HRM-PET's own LoRA features and used it as a router: at
-seed 42 on ImageNet-R, TII routes $63.80\%$ of samples correctly, the DRM
+seed 42 on ImageNet-R, TII routing accuracy is $63.80\%$, the DRM
 proposal $77.79\%$ and the RP head $77.12\%$, while the union of TII and the
-head reaches $82.99\%$. Since TII is wrong on $36.20\%$ of the set, the head
-repairs $53.0\%$ of its errors, against $62.0\%$ and $46.9\%$ on CIFAR-100
-and CUB-200. The union is an oracle that no router we build attains, and it
+head reaches $82.99\%$. Dividing the RP-correct/TII-wrong rate by TII's error rate gives
+$53.0\%$ recovery, against $62.0\%$ and $46.9\%$ on CIFAR-100 and CUB-200.
+These ratios use task-balanced rates, not pooled image counts.
+The union is an oracle, not achieved routing accuracy, and it
 compares bare TII with RP rather than the actual Stage 1 inputs.
 
 A better route need not become a better prediction: $\ell$ comes from the shared
-head, which spans every class seen so far, so a mis-routed sample is often
+head, which spans every class seen so far, so a mis-routed sample can be
 classified correctly anyway. The RP head is moreover a complete classifier that
 a routing-only variant would discard: in the historical routing-only diagnostic
 ($w=0.7$, $\beta=0$) on ImageNet-R, the routed head reaches
 $74.31\%$ and the projection head $70.08\%$, yet their union is $78.89\%$, the
-head alone contributing $4.58$ points of the test set and $2.43$ and $3.87$ on
+head alone contributing $4.58$ task-balanced points and $2.43$ and $3.87$ on
 the other two. These measurements give the two components described next.
 
 \section{Method}
@@ -248,7 +250,7 @@ $\hat t_{\rm DRM}$ the task proposed for direct re-matching. We write
 $z(\cdot)$ for per-sample standardisation with the population standard
 deviation floored at $10^{-6}$.
 
-\begin{figure}[htbp]
+\begin{figure}[!t]
 \centering
 % Original scientific artwork; photos are documented in FIGURE_SOURCES.txt.
 \definecolor{ib}{RGB}{43,99,151}%
@@ -507,7 +509,7 @@ test and shared head are unchanged. At $w=1$ the ordering is that of
 $r^{\rm task}$, recovering that proposal; the full baseline also needs $\beta=0$.
 
 \subsubsection{Second stage: gated fusion at the classification level.}
-Because $\ell$ comes from the shared head, it frequently predicts the correct
+Because $\ell$ comes from the shared head, it can predict the correct
 class in spite of a wrong routing decision, so we use the projection head itself
 as a secondary classifier, this time taking its class scores $s$. A fixed blend
 would alter confident primary predictions; we instead reduce the RP share as the
@@ -846,6 +848,8 @@ manuscript.
 % APER, not the ADAM of the arXiv version, and is cited by that name in the
 % text. If BibTeX is used, declare \bibliographystyle{splncs04}.
 %
+% Keep the 12-page main text separate from the reference-only pages.
+\clearpage
 \begin{thebibliography}{99}
 
 \bibitem{ref_hrmpet}
