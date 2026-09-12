@@ -733,16 +733,18 @@ The five-backbone ImageNet-R ablation uses seed $42$; baseline Acc@1 ranges
 from $68.47$ to $74.02$. We report differences between specified variants.
 
 \subsubsection{Routing with ungated class fusion.}
-Historical routing-only and ungated class-only variants improve Acc@1 on each
+Verified routing-only and ungated class-only variants improve Acc@1 on each
 backbone by $+0.29$--$+0.73$ and $+0.51$--$+3.07$, respectively.
 Adding routing to ungated class fusion changes Acc@1 by $-0.07$ to $+0.02$,
-not establishing equivalence. These five-backbone ranges remain historical;
-the smallest class-only gain ($+0.51$) is on Sup-21K.
+not establishing equivalence. All fifteen ablation results have post-fix
+verification; some retention values changed, but final accuracy did not.
 
 Post-fix full-minus-gated-class-only Acc@1 is $+0.13$, $+0.29$, $+0.78$,
 $+0.43$ and $+0.77$ on Sup-21K, MoCo-v3, iBOT-1K, iBOT-21K and DINO at seed $42$.
 These single-seed gains establish neither reliability nor retention benefit:
 MoCo-v3 Forgetting rises from $3.44$ to $3.69$.
+The gate is not uniformly beneficial either: full minus ungated full is
+$-0.26$ Acc@1 on MoCo-v3 and $-0.54$ on iBOT-1K.
 
 \subsubsection{Conditional contributions over four seeds.}
 For all three datasets and seeds 42--45, class-only fusion uses $w=1$,
@@ -802,21 +804,22 @@ optimality. We retain the earlier $w=0.7$ for consistency, not as a known optimu
 ImageNet-R and CUB informed development; neither is an untouched holdout.
 More seeds do not remove selection bias. CUB/pre-training overlap~\cite{ref_cub}
 was not audited. The grids and five-backbone ablation are single-seed; only
-the three-dataset contrasts use four seeds. Ungated five-backbone ablations
-remain historical, and CIFAR's conditional routing effect is unresolved.
+the three-dataset contrasts use four seeds. CIFAR's conditional routing effect
+is unresolved, and gate benefits vary across backbones.
 Same-feature RP-only reaches mean Acc@1 $69.89/88.80/87.26$ on
 ImageNet-R/CIFAR/CUB, below the full method, but is not a same-protocol RanPAC
 reproduction. Quoted baselines use another implementation; our 5-Datasets
 result is below the published figure. Retention benefit/equivalence remains
 unestablished; phase-level cost and sample repair/harm counts were not measured.
-Preflight reported two unreadable NotMNIST images, which the loader skips.
+The loader skips two zero-byte NotMNIST training files, also empty in the
+local source archive; we did not replace them.
 
 \section{Conclusion}
 
 A fixed-feature RP head supports task-proposal and class fusion, gaining
 $0.69$--$1.50$ Acc@1 points across three datasets. Gated routing effects are
 dataset-dependent; the negative CUB gate estimate remains unresolved.
-Main results and the cross-dataset grid have post-fix verification.
+Main results, ablations and the cross-dataset grid have post-fix verification.
 Accuracy gains do not establish reduced forgetting.
 
 %

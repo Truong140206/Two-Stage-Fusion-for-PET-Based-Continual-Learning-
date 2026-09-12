@@ -1,5 +1,76 @@
 # Checkpoint review — 2026-09-10
 
+## Completed ungated ablation — latest evidence,2026-09-12
+
+User supplied paper_ablation_finish_M6pkdC.log, attachment
+0fd9c5f5-20ec-4187-b947-d13478bd7d11, transcript SHA256
+a5d145793a9195ae6fe011ccd7b14774bba8eefd729afe24e4b5928505ea1025.
+Parsed15 distinct final records, each with10 stages;14 RUN lines plus1 reused
+Sup class_plain. Five checkpoint/fixed-feature audits PASS. Source SHA remains
+6747fed54a6f9679632bfdbbed1d3ebf2832dc801cf950b6164460f5a8858da9.
+PAPER_ABLATION_COMPLETE=15/15 and shell Done. No repeat GPU run required.
+
+Independent final/history comparison: all15 Acc@task/Acc@1/Acc@5/Loss match.
+Nine arms differ in retention: four class_plain (all except MoCo) and all five
+full_plain. All five route_only arms match all six historical final metrics.
+These completed post-fix results supersede the "ungated ranges unverified"
+notes below. The log's HISTORICAL_ONLY describes the old source logs, not the
+newly verified evaluations. Do not mark new results unverified on that basis.
+
+Verified ImageNet-R seed42 ablation, gate=none in all three arms:
+
+| Backbone | Arm | Acc@1 | Forgetting | Backward |
+|---|---|---:|---:|---:|
+| Sup | route_only | 74.3112 | 3.2155 | -2.8676 |
+| Sup | class_plain | 74.5300 | 3.7863 | -3.7464 |
+| Sup | full_plain | 74.5499 | 3.7568 | -3.6970 |
+| MoCo-v3 | route_only | 68.8050 | 3.0714 | -2.6673 |
+| MoCo-v3 | class_plain | 70.6984 | 2.9888 | -2.9389 |
+| MoCo-v3 | full_plain | 70.6288 | 3.0844 | -3.0190 |
+| iBOT-1K | route_only | 72.4635 | 3.9249 | -3.9249 |
+| iBOT-1K | class_plain | 74.9609 | 3.5125 | -3.1602 |
+| iBOT-1K | full_plain | 74.9527 | 3.5055 | -3.1184 |
+| iBOT-21K | route_only | 73.9070 | 3.8844 | -3.8104 |
+| iBOT-21K | class_plain | 75.7244 | 3.1358 | -2.6837 |
+| iBOT-21K | full_plain | 75.7164 | 3.1572 | -2.6162 |
+| DINO | route_only | 70.9654 | 2.8248 | -2.5387 |
+| DINO | class_plain | 72.9082 | 3.3055 | -2.5007 |
+| DINO | full_plain | 72.8688 | 3.4052 | -2.5346 |
+
+Acc@1 contrasts in Sup/MoCo/iBOT1K/iBOT21K/DINO order:
+route_only minus identity: .2921/.3331/.5754/.6161/.7307;
+class_plain minus identity: .5109/2.2265/3.0728/2.4335/2.6735;
+full_plain minus class_plain: .0199/-.0696/-.0082/-.0080/-.0394.
+Published rounded ranges remain correct: +.29..+.73, +.51..+3.07,
+and -.07..+.02. No equivalence or across-backbone significance inferred.
+
+Combining these with already-verified full-gated logs, full-gated minus
+full_plain Acc@1 = +.9617/-.2635/-.5401/+.1240/+.0452. In particular,
+the margin gate is not uniformly helpful on SSL backbones. The paper now
+states the MoCo/iBOT1K declines explicitly; do not pick per-backbone gate
+settings using these test results. The method remains w=.7,beta=.5,margin.
+
+NotMNIST diagnosis is now specific: both reported files are in Train and
+have0 bytes on disk AND in the corresponding members of the local notMNIST.zip.
+All four byte hashes equal the empty-content SHA256:
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.
+Thus the local archive already contains empty entries; no evidence of loss
+specific to extraction or evaluator cleanup. This does not authenticate the
+upstream archive or audit every sample. Loader skips them; no dataset edits.
+Paper caveat updated from unknown unreadable images to empty training entries.
+
+Main n=4,48 priority controls,9 weight cells,20 backbone-grid cells and this
+15-arm ablation now have completed aggregate verification. Still separate:
+historical per-sample/oracle diagnostics, phase-level cost, sample repair/harm,
+same-protocol RanPAC reproduction and final submission checks. Do not claim
+these optional/additional items are covered by aggregate verification.
+No new local GPU run or algorithm/driver change in this synchronization.
+
+Canonical PDF/LaTeX synchronized in place. XeLaTeX twice PASS;14 PDF pages,
+content/acknowledgment end on12 and references start on13. Changed pages11–12
+rendered and visually checked; no overlap, undefined references, missing
+glyphs or over/underfull boxes. Existing amsmath vec warning remains.
+
 ## Remaining ungated ablation runner — 2026-09-12
 
 Added tools/verify_paper_ablation.py, fixed ImageNet-R seed42 on the five
