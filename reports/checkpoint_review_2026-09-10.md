@@ -1,5 +1,31 @@
 # Checkpoint review — 2026-09-10
 
+## Remaining ungated ablation runner — 2026-09-12
+
+Added tools/verify_paper_ablation.py, fixed ImageNet-R seed42 on the five
+paper backbones. Three arms, gate=none: route_only(w=.7,beta=0),
+class_plain(w=1,beta=.5), full_plain(w=.7,beta=.5). Fifteen arm results,
+but Sup class_plain is read from its verified soict_final_v1 log using the
+original74ff5c9 driver hash, so14 new evaluations remain.
+All five identity baselines are read-only: Sup maskfix_verify_v2, four SSL
+paper_backbone_verify_v1. Old drivers untouched to preserve their provenance.
+No training, tuning or repeat of the completed20-cell grid/48controls.
+
+Checks all five checkpoint sets and existing log metadata before GPU work,
+uses the shared grid lock,16GiB GPU guard and exclusive logs; same-tag complete
+logs are reusable. Historical ungated filenames are exact, optional comparison
+only; missing old logs are explicitly NOT_FOUND, never substituted by gated
+ones. The corrected fixed-arm results still allow direct paper contrasts.
+Final marker PAPER_ABLATION_COMPLETE=15/15; default summary
+paper_ablation_verify_v1__summary.json under the existing output root.
+
+--audit-notmnist reads only the two reported images (Train/Test if present)
+and matching ZIP members. Reports readability, SHA256 and split; never repairs,
+extracts, deletes or replaces data. This is not a full dataset-integrity audit.
+Local79 dependency-free tests PASS (10 new), no local torch/GPU run. The new
+14 evaluations are pending; do not mark these ablation ranges verified yet.
+PDF/model source unchanged in this runner-only update.
+
 ## Completed backbone grid — 2026-09-12, latest
 
 User supplied paper_backbone_finish_HbWdK6.log in attachment
