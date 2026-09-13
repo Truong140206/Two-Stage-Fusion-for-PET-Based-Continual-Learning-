@@ -1,5 +1,35 @@
 # Checkpoint review — 2026-09-10
 
+## Evidence-focused revision within page limit — 2026-09-13
+
+User approved the three proposed improvements while retaining the submission
+page limit. Edited the canonical TeX/PDF in place; pre-edit version remains in
+Git commit 134ba46. No new folder, model change, tuning or GPU evaluation.
+
+- Rewrote abstract/contributions/conclusion around the two uses of one analytic
+  predictor, keeping non-universal component effects and unresolved retention.
+- Moved all original oracle diagnostics from Related Work to Experiments,
+  retaining their task-balanced weighting and distinction from actual repairs.
+- Added Table 3 with all twenty verified grid Acc@1 deltas and Table 4 with
+  five component variants on three datasets, mean and sample SD over four seeds.
+  No test-selected per-dataset winner; negative/unresolved contrasts retained.
+- Shortened redundant background and problem-setting prose, without reducing
+  body font, changing margins or scaling the unframed pipeline.
+- Clarified that final retained logits can differ from the task identity
+  recorded by the evaluator when CRM replaces logits.
+
+Automated checks PASS: all 20 grid cells and 30 component mean/SD entries match
+the verified tables in this audit record at two-decimal rounding. Original
+three numerical tables, all displayed equations, TikZ and bibliography are
+unchanged from 134ba46. All citation/reference keys resolve.
+XeLaTeX twice PASS: 14 PDF pages, exactly 12 content pages with Conclusion and
+Acknowledgment on page 12; references start on page 13. All fonts embedded;
+no missing glyph/image or overfull/underfull warning. Existing amsmath vec
+warning remains nonfatal. Rendered-page QA PASS, including detailed checks of
+pages 2, 7, 10 (both new tables) and 12. Local compilation, not live Overleaf.
+Completed experiment batches remain closed. Controlled timing/peak memory and
+same-protocol RanPAC are optional extensions, not required numerical reruns.
+
 ## Editorial revision after uploaded-PDF review — 2026-09-13
 
 The user approved three wording changes after reviewing Truong/Thai (4).pdf:
