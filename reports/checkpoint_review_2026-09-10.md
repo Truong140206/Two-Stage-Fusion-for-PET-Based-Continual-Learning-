@@ -1,5 +1,24 @@
 # Checkpoint review — 2026-09-10
 
+## Editorial revision after uploaded-PDF review — 2026-09-13
+
+The user approved three wording changes after reviewing Truong/Thai (4).pdf:
+define CIL as aiming to mitigate forgetting; state head-array storage as
+O(M^2 + M|Y| + dM), dominated by the Gram matrix in this configuration;
+and consolidate masking-fix/verification history into one reproducibility
+paragraph in Setup. Contributions and Results now emphasise the research
+instead of repeating the audit history. The correction history and retention
+caveat remain explicit, as does the historical/non-comparative 283 s timing.
+
+Automated comparison against pre-edit HEAD confirms every tabular environment,
+displayed algorithm equation, TikZ pipeline and bibliography is unchanged.
+No model/config/driver changes or new experiment needed. Pipeline remains
+unframed. XeLaTeX twice PASS; 12 content pages plus 2 reference-only pages;
+reference/citation keys resolve, no missing glyph/image or overfull/underfull
+warning. Contact-sheet QA plus detailed pages 4, 7, 8 PASS. The existing
+amsmath vec warning is nonfatal. All earlier completed verification batches
+remain complete; this is an editorial revision, not new numerical evidence.
+
 ## Oracle diagnostics COMPLETE — 2026-09-13 (current checkpoint)
 
 User transcript attachment 2a427381-9759-438e-b533-46ebd1835496, SHA256:

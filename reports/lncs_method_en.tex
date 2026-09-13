@@ -114,8 +114,8 @@ fusion before re-matching and gated class fusion afterwards. The head is fitted
 in closed form without gradient descent. A three-dataset, four-seed study
 separates gains in routing/classification from unresolved retention effects.
 Conditional ablations and weight comparisons examine what each operation adds.
-We also verify a four-dataset by five-pretraining grid after the masking fix,
-with its remaining limitations stated in Sect.~\ref{sec:exp}.
+We also evaluate the method across four datasets and five pre-training settings
+to examine the consistency of its gains.
 
 \section{Related Work}
 \label{sec:related}
@@ -161,9 +161,9 @@ but requires current-task data to fit the RP head.
 \subsection{HRM-PET: The Baseline We Build On}
 \label{sec:baseline}
 
-We use the released HRM-PET~\cite{ref_hrmpet} inference path. The seed-$42$
-routing and classifier-overlap diagnostics below have post-fix verification;
-they use equal task weights, as in Sect.~\ref{sec:setup}.
+We use the released HRM-PET~\cite{ref_hrmpet} inference path. The routing and
+classifier-overlap diagnostics below use seed $42$ and equal task weights,
+as in Sect.~\ref{sec:setup}.
 
 \subsubsection{Task-identity inference (TII).}
 The input image is passed through the \emph{bare} backbone, with no adapter
@@ -208,7 +208,7 @@ compares bare TII with RP rather than the actual Stage 1 inputs.
 A better route need not become a better prediction: $\ell$ comes from the shared
 head, which spans every class seen so far, so a mis-routed sample can be
 classified correctly anyway. The RP head is moreover a complete classifier that
-a routing-only variant would discard: in the verified routing-only diagnostic
+a routing-only variant would discard: in the routing-only diagnostic
 ($w=0.7$, $\beta=0$) on ImageNet-R, the routed head reaches
 $74.31\%$ and the projection head $70.08\%$, yet their union is $78.89\%$, the
 head alone contributing $4.58$ task-balanced points and $2.43$ and $3.87$ on
@@ -219,8 +219,8 @@ the other two. These measurements give the two components described next.
 
 \subsection{Problem Statement}
 
-Class-incremental learning (CIL) learns a sequence of $T$ tasks without
-forgetting earlier ones. The $t$-th task consists of $n_t$ samples
+Class-incremental learning (CIL) aims to learn a sequence of $T$ tasks while
+mitigating forgetting of earlier ones. The $t$-th task consists of $n_t$ samples
 $\mathcal{D}_t=\{(x^t_i,y^t_i)\}_{i=1}^{n_t}$ drawn from a class set
 $\mathcal{C}_t$, where $x^t_i \in \mathcal{X}$ is an input image and
 $y^t_i \in \mathcal{Y}$ its label.
@@ -549,8 +549,11 @@ not measure: changing the DRM proposal can change the number of adapter
 evaluations.
 
 Per task the head accumulates $G$ and $C$ over the current task's training split
-and solves one ridge system, so its footprint is set by $M$, not by how many
-samples have been seen. At $M = 10^4$ the Gram matrix holds $10^8$ float64
+and solves one ridge system. Its stored arrays scale as
+$O(M^2+M|\mathcal Y|+dM)$: $G$ has $M^2$ entries, $C$ and $W_{\rm out}$
+each have $M|\mathcal Y|$, and the projection has $dM$. Storage does not grow
+with the number of observed samples for fixed dimensions and class capacity.
+The Gram matrix dominates in our setting. At $M = 10^4$ it holds $10^8$ float64
 entries, or $800$~MB. Together with its regularised copy and Cholesky factor,
 these three matrices require approximately $2.4$~GB; this is an analytical
 estimate, not a measured total-memory peak. A historical ten-task evaluation
@@ -601,14 +604,17 @@ at stage $t$, the retention measures are
 Both averages exclude the last task, and the maximum includes only stages at
 which task $i$ has been learned. Lower is better for Loss and Forgetting.
 
-\subsubsection{Sanity check.}
+\subsubsection{Reproducibility and sanity check.}
 $w=1$ restores the baseline DRM proposal and $\beta=0$ bypasses class fusion.
-After correcting unseen-class masking, this identity matches the baseline to
-logged precision at every stage for all three datasets and seeds 42--45.
-For example, ImageNet-R seed 42 gives Acc@task $77.7914$, Acc@1 $74.0191$ and
-Loss $1.2305$. Main runs, four-seed controls and the joint weight grid were
-re-evaluated. Backbone/first-adapter feature tensors match across checkpoints
-in all main/grid checkpoint sets; all forty grid evaluations are verified.
+With corrected unseen-class masking, this identity matches the baseline to
+logged precision at every stage for all three datasets and seeds 42--45;
+ImageNet-R seed 42 gives Acc@task $77.7914$, Acc@1 $74.0191$ and Loss $1.2305$.
+Re-evaluation of the main runs, controls, grids, ablations and oracle diagnostics
+confirmed their reported final accuracies. Some intermediate losses and
+retention values changed relative to earlier logs, including retention in ten
+full-method grid runs; we report the corrected values throughout. All forty
+grid evaluations were checked, and backbone/first-adapter feature tensors match
+across checkpoints in all main/grid checkpoint sets.
 
 \subsection{Main Results}
 \label{sec:results}
@@ -621,8 +627,7 @@ deviation describes the stability of the improvement, not the seeds' difficulty.
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 \caption{Final results, mean $\pm$ sample SD over seeds 42--45; Change is paired
-full minus baseline. Accuracy/retention are percentages (changes in points).
-All three datasets have complete post-fix verification.}\label{tab:main}
+full minus baseline. Accuracy/retention are percentages (changes in points).}\label{tab:main}
 \begin{tabular}{llrrr}
 \hline
 Dataset & Metric & HRM-PET & Proposed & Change\\
@@ -668,7 +673,7 @@ The full method's Acc@1 improvement repeats across every seed. These aggregate
 gains do not establish how many routing repairs also repair classification.
 
 \subsubsection{Retention (Forgetting, Backward): unresolved.}
-All six paired retention intervals include zero. Corrected CIFAR Forgetting is
+All six paired retention intervals include zero. CIFAR Forgetting is
 $-0.150$ $[-0.302,+0.002]$ and Backward $+0.136$ $[-0.015,+0.287]$.
 These related metrics are not independent confirmations. Neither consistent
 improvement nor equivalence is established: four seeds leave substantial
@@ -719,11 +724,10 @@ comparison remains the paired baseline--full difference in Table~\ref{tab:main}.
 \subsection{The Full Grid}
 \label{sec:grid}
 
-The $4\times5$ grid uses one code path at seed $42$. Post-fix verification of all
-forty evaluations reproduces final accuracy and Loss; ten full-method runs
-have changed retention values. All twenty cells improve Acc@task by $+0.97$ to
+The $4\times5$ grid uses one code path at seed $42$.
+All twenty cells improve Acc@task by $+0.97$ to
 $+4.57$ and Acc@1 by $+0.59$ to $+3.58$, against baseline Acc@1 of $31.8$--$93.8$.
-Verified final accuracy on earlier tasks rises in every cell ($+1.83$ on
+Final accuracy on earlier tasks rises in every cell ($+1.83$ on
 average), versus $+1.58$ at learning time. Backward, their difference, worsens
 in five cells: learning-time accuracy rose more, not final accuracy less.
 This decomposition uses rounded per-task logs and remains descriptive.
@@ -735,13 +739,12 @@ The five-backbone ImageNet-R ablation uses seed $42$; baseline Acc@1 ranges
 from $68.47$ to $74.02$. We report differences between specified variants.
 
 \subsubsection{Routing with ungated class fusion.}
-Verified routing-only and ungated class-only variants improve Acc@1 on each
+Routing-only and ungated class-only variants improve Acc@1 on each
 backbone by $+0.29$--$+0.73$ and $+0.51$--$+3.07$, respectively.
 Adding routing to ungated class fusion changes Acc@1 by $-0.07$ to $+0.02$,
-not establishing equivalence. All fifteen ablation results have post-fix
-verification; some retention values changed, but final accuracy did not.
+not establishing equivalence.
 
-Post-fix full-minus-gated-class-only Acc@1 is $+0.13$, $+0.29$, $+0.78$,
+Full-minus-gated-class-only Acc@1 is $+0.13$, $+0.29$, $+0.78$,
 $+0.43$ and $+0.77$ on Sup-21K, MoCo-v3, iBOT-1K, iBOT-21K and DINO at seed $42$.
 These single-seed gains establish neither reliability nor retention benefit:
 MoCo-v3 Forgetting rises from $3.44$ to $3.69$.
@@ -795,8 +798,6 @@ reported $0.7$. At $\beta=0.5$, Acc@1 spans $0.11$ points, versus about one poin
 for Acc@task. Across four seeds, $0.6$ gains
 $+0.332$ $[+0.143,+0.522]$ Acc@task and $+0.108$ $[-0.064,+0.280]$ Acc@1
 over $0.7$ with the gate and $\beta=0.5$; the Acc@1 sign reverses on seed 43.
-This contrast and all nine cells were verified after the masking fix: final
-Acc@1 is unchanged, but some intermediate/retention values differ.
 These full-method comparisons establish neither equivalence nor routing-only
 optimality. We retain the earlier $w=0.7$ for consistency, not as a known optimum.
 
@@ -822,8 +823,6 @@ local source archive; we did not replace them.
 A fixed-feature RP head supports task-proposal and class fusion, gaining
 $0.69$--$1.50$ Acc@1 points across three datasets. Gated routing effects are
 dataset-dependent; the negative CUB gate estimate remains unresolved.
-Main results, oracle diagnostics, ablations and the cross-dataset grid have
-post-fix verification.
 Accuracy gains do not establish reduced forgetting.
 
 %
