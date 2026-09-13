@@ -111,6 +111,28 @@ def check_upstream(path):
         raise ValueError("RanPAC source must be clean at pinned revision " + REVISION)
 
 
+def acquire_shared_lock(path, locker=None):
+    """Use the persistent flock inode shared by existing paper drivers.
+
+    File existence is NOT ownership. Never unlink/replace the lock: that could
+    allow another process to acquire a different inode while the first is held.
+    """
+    if locker is None:
+        import fcntl
+        locker = fcntl
+    stream = path.open("a")
+    try:
+        locker.flock(stream, locker.LOCK_EX | locker.LOCK_NB)
+    except BlockingIOError as exc:
+        stream.close()
+        raise RuntimeError("Another paper verifier holds the shared lock; "
+                           "no run log created. Retry when it finishes; do not delete the lock") from exc
+    except BaseException:
+        stream.close()
+        raise
+    return stream
+
+
 def prepare(support):
     support.mkdir(parents=True, exist_ok=True)
     upstream, runtime = support / "upstream", support / "runtime"
@@ -377,9 +399,7 @@ def main():
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", OMP_NUM_THREADS=str(args.cpu_threads),
                MKL_NUM_THREADS=str(args.cpu_threads), OPENBLAS_NUM_THREADS=str(args.cpu_threads))
     # Reuse the existing paper-evaluation lock; never stop someone else's job.
-    lock = args.output_root / ".paper_backbone_verifier.lock"
-    with lock.open("x") as stream:
-        stream.write(json.dumps({"pid": os.getpid(), "purpose": "RanPAC bounded baseline"}))
+    lock = acquire_shared_lock(args.output_root / ".paper_backbone_verifier.lock")
     process = None
     handle = None
     try:
@@ -388,7 +408,8 @@ def main():
             emit("LOG", str(log))
         print("LIMIT_MINUTES=" + str(args.max_minutes), flush=True)
         process = subprocess.Popen(cmd, stdout=handle, stderr=subprocess.STDOUT,
-                                   env=env, start_new_session=True)
+                                   env=env, start_new_session=True,
+                                   pass_fds=(lock.fileno(),))
         try:
             code = process.wait(timeout=args.max_minutes * 60)
         except subprocess.TimeoutExpired:
@@ -417,7 +438,7 @@ def main():
                 process.wait()
         if handle:
             handle.close()
-        lock.unlink()
+        lock.close()
 
 
 def idle_gpu_preflight():

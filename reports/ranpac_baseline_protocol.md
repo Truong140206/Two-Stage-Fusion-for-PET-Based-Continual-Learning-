@@ -31,7 +31,11 @@ The current paper/checkpoints remain unchanged (paper commit 807fd6f).
 One reusable support directory under output-root: _ranpac_support, containing
 upstream and private runtime. No datasets or backbone downloads, model saves,
 image copies or paper edits. One exclusive log and small summary per tag.
-Existing paper-evaluation lock respected. Busy GPU, <16 GiB free VRAM or
+The persistent paper-evaluation file uses the same nonblocking POSIX flock as
+the earlier drivers. File existence alone is not ownership. Never delete this
+file; closing descriptors releases ownership. The worker inherits the lock
+descriptor so ownership is preserved if its launcher unexpectedly exits.
+Busy GPU, <16 GiB free VRAM or
 <12 GiB available RAM abort before opening a run log. Worker rechecks GPU.
 Default child budget: 60 minutes including CPU preflight; preparation is outside
 that budget. Timeout stops only this child group including its data loaders.
@@ -49,3 +53,13 @@ CPU guard/metric tests: tests/test_ranpac_baseline.py. Windows lacks torch/CUDA;
 no GPU execution or measured time claimed. Linux preflight validates imports,
 CPU model construction, backbone equality, data mapping and official config.
 Local result: 17 new tests plus 88 existing verification tests = 105 PASS.
+
+## Lock interoperability correction — 2026-09-14
+
+The first lab attempt installed upstream/timm successfully, then stopped before
+opening the run log because the initial runner used exclusive file creation
+instead of the existing drivers' persistent flock. Corrected only the RanPAC
+runner, not the hash-pinned old drivers. No training or numerical result was
+produced by that attempt. The same ranpac_imr42_v1 tag remains usable.
+Added five portable lock-regression tests and one real POSIX flock test.
+Windows: 110 tests pass, one POSIX test skipped; Linux runs all 23 RanPAC tests.

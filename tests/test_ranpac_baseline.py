@@ -3,11 +3,74 @@ import random
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from tools import run_ranpac_baseline as runner
 
 
 class RanPACTests(unittest.TestCase):
+    def test_existing_unlocked_file_is_reused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / ".paper_backbone_verifier.lock"
+            path.touch()
+            before = path.stat().st_ino
+            locker = Mock(LOCK_EX=2, LOCK_NB=4)
+            stream = runner.acquire_shared_lock(path, locker)
+            locker.flock.assert_called_once_with(stream, 6)
+            stream.close()
+            self.assertTrue(path.exists())
+            self.assertEqual(path.stat().st_ino, before)
+
+    def test_existing_lock_contents_not_truncated(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "lock"
+            path.write_text("legacy metadata", encoding="utf-8")
+            stream = runner.acquire_shared_lock(path, Mock(LOCK_EX=2, LOCK_NB=4))
+            stream.close()
+            self.assertEqual(path.read_text(encoding="utf-8"), "legacy metadata")
+
+    def test_busy_lock_closes_handle_and_preserves_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "lock"
+            locker = Mock(LOCK_EX=2, LOCK_NB=4)
+            locker.flock.side_effect = BlockingIOError("held")
+            with self.assertRaisesRegex(RuntimeError, "do not delete"):
+                runner.acquire_shared_lock(path, locker)
+            self.assertTrue(locker.flock.call_args.args[0].closed)
+            self.assertTrue(path.exists())
+
+    def test_other_lock_error_closes_handle(self):
+        with tempfile.TemporaryDirectory() as folder:
+            locker = Mock(LOCK_EX=2, LOCK_NB=4)
+            locker.flock.side_effect = OSError("filesystem error")
+            with self.assertRaises(OSError):
+                runner.acquire_shared_lock(Path(folder) / "lock", locker)
+            self.assertTrue(locker.flock.call_args.args[0].closed)
+
+    def test_lock_can_be_reopened_after_release(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "lock"
+            locker = Mock(LOCK_EX=2, LOCK_NB=4)
+            first = runner.acquire_shared_lock(path, locker)
+            first.close()
+            second = runner.acquire_shared_lock(path, locker)
+            self.assertFalse(second.closed)
+            second.close()
+            self.assertEqual(locker.flock.call_count, 2)
+
+    @unittest.skipUnless(__import__("os").name == "posix", "Real flock requires POSIX")
+    def test_real_flock_exclusion_and_release(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "lock"
+            first = runner.acquire_shared_lock(path)
+            try:
+                with self.assertRaises(RuntimeError):
+                    runner.acquire_shared_lock(path)
+            finally:
+                first.close()
+            second = runner.acquire_shared_lock(path)
+            second.close()
+            self.assertTrue(path.exists())
+
     def test_unshuffled_order(self):
         self.assertEqual(runner.class_order(42, False), list(range(200)))
 
