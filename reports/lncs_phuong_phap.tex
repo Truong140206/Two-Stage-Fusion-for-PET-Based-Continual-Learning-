@@ -498,10 +498,11 @@ các tác vụ đã thấy ở Tầng 1 và các lớp đã thấy ở Tầng 2,
 Tầng 1 chạy sau lượt thích nghi ban đầu và trước DRM. Đầu vào là $r$, tức logit
 của đầu dùng chung dưới bộ điều hợp được TII trần chọn, không phải logit phụ
 $u$. Cả $r$ và điểm RP $s$ được ánh xạ về các tác vụ đã thấy bằng
-\begin{align*}
-r^{\mathrm{task}}_t &= \max_{c \in \mathcal{C}_t} r_c,\\
-s^{\mathrm{task}}_t &= \max_{c \in \mathcal{C}_t} s_c .
-\end{align*}
+\[
+r^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} r_c,
+\qquad
+s^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} s_c .
+\]
 Ở đây $t=1,\dots,\hat{T}$, trong đó $\hat{T}$ là số tác vụ đã thấy; lớp thuộc tác
 vụ chưa thấy không tham gia phép cực đại nào. Hai vector được trộn sau chuẩn hóa:
 \begin{equation}
@@ -761,7 +762,7 @@ Bảng~\ref{tab:grid} báo cáo lưới $4\times5$ bằng một đường mã �
 Cả hai mươi ô tăng Acc@1 từ $+0.59$ đến $+3.58$ điểm, trên đường cơ sở Acc@1
 $31.8$--$93.8$; mức tăng Acc@task là $+0.97$ đến $+4.57$.
 
-\begin{table}[htbp]
+\begin{table}[!t]
 \centering
 \small
 \setlength{\tabcolsep}{6pt}
@@ -780,25 +781,8 @@ iBOT-21K  & +2.55 & +1.80 & +2.63 & +0.59\\
 DINO      & +2.68 & +2.03 & +0.97 & +0.75\\
 \bottomrule
 \end{tabular}
-\end{table}
 
-Độ chính xác cuối trên các tác vụ cũ tăng ở mọi ô (trung bình $+1.83$), so với
-$+1.58$ tại thời điểm học. Backward, tức hiệu giữa hai đại lượng, xấu đi ở năm
-ô vì độ chính xác lúc học tăng nhiều hơn, không phải độ chính xác cuối giảm.
-Phân rã này dùng log theo tác vụ đã làm tròn và chỉ mang tính mô tả.
-
-\subsection{Khảo sát loại bỏ thành phần}
-\label{sec:ablation}
-
-Bảng~\ref{tab:components} cô lập bộ dự đoán RP cùng đặc trưng và các biến thể
-hợp nhất lớp. Mọi biến thể RP dùng cùng đặc trưng tác vụ đầu cố định và cấu
-hình ridge. RP-only dự đoán trực tiếp từ $s$ và không tái lập toàn bộ protocol
-RanPAC. Class-only tắt hợp nhất định tuyến ($w=1$); cả hai biến thể class-only
-dùng $\beta=0.5$.
-
-\begin{table}[htbp]
-\centering
-\small
+\vspace{.8\baselineskip}
 \setlength{\tabcolsep}{5pt}
 \caption{So sánh thành phần: Acc@1 cuối (\%), trung bình $\pm$ SD mẫu trên
 seed 42--45. Phương pháp đầy đủ dùng $w=0.7$, $\beta=0.5$ và cổng biên.
@@ -817,6 +801,22 @@ Chỉ lớp, có cổng & $75.10\pm0.21$ & $\mathbf{90.50\pm0.08}$ & $87.72\pm0.
 \bottomrule
 \end{tabular}
 \end{table}
+
+\noindent\begin{minipage}{\linewidth}
+Độ chính xác cuối trên tác vụ cũ tăng ở mọi ô (trung bình $+1.83$), so với
+$+1.58$ lúc học. Backward xấu đi ở năm ô vì mức tăng lúc học lớn hơn, không
+phải độ chính xác cuối giảm; phân rã này dùng log theo tác vụ đã làm tròn và
+chỉ mang tính mô tả.
+\end{minipage}
+
+\subsection{Khảo sát loại bỏ thành phần}
+\label{sec:ablation}
+
+Bảng~\ref{tab:components} cô lập bộ dự đoán RP cùng đặc trưng và các biến thể
+hợp nhất lớp. Mọi biến thể RP dùng cùng đặc trưng tác vụ đầu cố định và cấu
+hình ridge. RP-only dự đoán trực tiếp từ $s$ và không tái lập toàn bộ protocol
+RanPAC. Class-only tắt hợp nhất định tuyến ($w=1$); cả hai biến thể class-only
+dùng $\beta=0.5$.
 
 Phương pháp đầy đủ vượt RP-only trên cả ba bộ dữ liệu, nhưng hợp nhất lớp tạo
 ra phần lớn mức tăng so với HRM-PET. Chỉ lớp không cổng có trung bình CUB cao
