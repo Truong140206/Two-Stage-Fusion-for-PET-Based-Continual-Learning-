@@ -744,13 +744,30 @@ Table~\ref{tab:grid} reports the $4\times5$ grid using one code path at seed $42
 All twenty cells improve Acc@1 by $+0.59$ to $+3.58$ points, against baseline
 Acc@1 of $31.8$--$93.8$; Acc@task gains are $+0.97$ to $+4.57$.
 
-\begin{table}[!t]
+Final accuracy on earlier tasks rises in every cell ($+1.83$ on
+average), versus $+1.58$ at learning time. Backward, their difference, worsens
+in five cells: learning-time accuracy rose more, not final accuracy less.
+This decomposition uses rounded per-task logs and remains descriptive.
+
+\subsection{Ablation}
+\label{sec:ablation}
+
+\noindent\begin{minipage}{\linewidth}
+Table~\ref{tab:components} isolates the matched-feature RP predictor and the
+class-fusion variants. All RP variants use the same fixed first-task features
+and ridge configuration. RP-only predicts directly from $s$ and is not a
+reproduction of the complete RanPAC protocol. Class-only disables routing
+fusion ($w=1$); both class-only variants use $\beta=0.5$.
+\end{minipage}
+\par\medskip
+
+\begin{table}[!ht]
 \centering
 \small
 \setlength{\tabcolsep}{6pt}
-\caption{Acc@1 change (percentage points), full minus matched HRM-PET,
-seed $42$. All cells use the same $w=0.7$, $\beta=0.5$ and margin gate;
-these are single-seed comparisons, not confidence intervals.}
+\caption{Acc@1 change (points), full minus matched HRM-PET at seed $42$.
+All cells use $w=0.7$, $\beta=0.5$ and the margin gate; no confidence
+intervals are implied.}
 \label{tab:grid}
 \begin{tabular}{lrrrr}
 \toprule
@@ -764,12 +781,11 @@ DINO      & +2.68 & +2.03 & +0.97 & +0.75\\
 \bottomrule
 \end{tabular}
 
-\vspace{.8\baselineskip}
+\vspace{.35\baselineskip}
 \setlength{\tabcolsep}{5pt}
-\caption{Component comparison: final Acc@1 (\%), mean $\pm$ sample SD over
-seeds 42--45. Full uses $w=0.7$, $\beta=0.5$ and the margin gate.
-Bold marks the highest mean in each column, not a significance claim.
-The full method is not uniformly best among the variants.}
+\caption{Final Acc@1 (\%), mean $\pm$ sample SD over seeds 42--45.
+Full uses $w=0.7$, $\beta=0.5$ and the margin gate. Bold marks the highest
+column mean, not significance; full is not uniformly best.}
 \label{tab:components}
 \begin{tabular}{lrrr}
 \toprule
@@ -783,22 +799,6 @@ Full (ours) & $\mathbf{75.18\pm0.24}$ & $90.47\pm0.05$ & $87.88\pm0.27$\\
 \bottomrule
 \end{tabular}
 \end{table}
-
-\noindent\begin{minipage}{\linewidth}
-Final accuracy on earlier tasks rises in every cell ($+1.83$ on
-average), versus $+1.58$ at learning time. Backward, their difference, worsens
-in five cells: learning-time accuracy rose more, not final accuracy less.
-This decomposition uses rounded per-task logs and remains descriptive.
-\end{minipage}
-
-\subsection{Ablation}
-\label{sec:ablation}
-
-Table~\ref{tab:components} isolates the matched-feature RP predictor and the
-class-fusion variants. All RP variants use the same fixed first-task features
-and ridge configuration. RP-only predicts directly from $s$ and is not a
-reproduction of the complete RanPAC protocol. Class-only disables routing
-fusion ($w=1$); both class-only variants use $\beta=0.5$.
 
 Full exceeds RP-only on all three datasets, but class fusion accounts for much
 of the gain over HRM-PET. Ungated class-only has the highest CUB mean and
