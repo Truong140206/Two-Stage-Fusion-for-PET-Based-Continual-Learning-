@@ -1,9 +1,10 @@
-MAIN FILE: lncs_method_en.tex
+MAIN FILE: main.tex
 COMPILER: XeLaTeX (not pdfLaTeX)
 
 Upload the complete ZIP as a new Overleaf project, or replace the matching
-files in your existing project. Set lncs_method_en.tex as Main document.
-Select XeLaTeX, then Recompile from scratch.
+files in your existing project. Overleaf should detect main.tex automatically;
+otherwise set main.tex as Main document. Select XeLaTeX, then Recompile from
+scratch.
 
 The ZIP includes the source, the current Springer llncs.cls, mallard.jpg,
 and FIGURE_SOURCES.txt. The image is at the ZIP root; the source also supports

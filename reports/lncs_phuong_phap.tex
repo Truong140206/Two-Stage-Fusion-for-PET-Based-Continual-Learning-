@@ -226,6 +226,23 @@ $10^{-6}$.
 \definecolor{ip}{RGB}{111,79,156}%
 \definecolor{io}{RGB}{194,105,32}%
 \definecolor{ir}{RGB}{172,63,99}%
+\newcommand{\snowmark}{%
+  \tikz[baseline=-.55ex,x=.11em,y=.11em,line cap=round]{%
+    \foreach \a in {0,60,...,300}{%
+      \draw[ib,line width=.48pt] (0,0)--(\a:4.3);
+      \draw[ib,line width=.32pt] (\a:2.8)--({\a+24}:3.8);
+      \draw[ib,line width=.32pt] (\a:2.8)--({\a-24}:3.8);
+    }}}
+\newcommand{\firemark}{%
+  \tikz[baseline=-.55ex,x=.09em,y=.09em]{%
+    \path[fill=io]
+      (0,-4.8) .. controls (-4.0,-2.2) and (-2.2,1.2) .. (-1.1,4.7)
+      .. controls (-.2,2.8) and (1.8,2.3) .. (2.4,5.1)
+      .. controls (5.0,1.1) and (4.0,-2.6) .. (0,-4.8) -- cycle;
+    \path[fill=yellow!75!orange]
+      (.15,-4.0) .. controls (-1.6,-2.2) and (-.5,-.2) .. (.7,1.8)
+      .. controls (2.5,-.6) and (2.6,-2.5) .. (.15,-4.0) -- cycle;}}
+\newcommand{\analyticmark}{\textcolor{ip}{\(\boldsymbol{\Sigma}\)}}
 \begin{tikzpicture}[x=1cm,y=1cm,
   font=\fontsize{8}{9}\selectfont,
   arr/.style={-{Stealth[length=1.5mm]},line width=.6pt,draw=ib},
@@ -268,25 +285,22 @@ $10^{-6}$.
 ]
 % Three aligned lanes; fusion details stay inside their own coloured panels.
 \path[use as bounding box] (0,-.03) rectangle (12.1,9.52);
-\node[heading,text=io] at (0,9.30) {(a) Học các mô-đun PET trên tác vụ $t$};
+\node[heading,text=io] at (0,9.30) {(a) Học PET trên tác vụ $t$};
 \node[tinylabel,anchor=east,text=black!65] at (12.1,9.30)
-  {F: cố định \quad T: huấn luyện \quad A: cập nhật giải tích};
+  {\snowmark\ Cố định \quad \firemark\ Huấn luyện \quad
+   \analyticmark\ Giải tích};
 \node[inner sep=0pt] at (.48,8.63) {\mallardimage{.72cm}};
 \node[tinylabel] at (.48,8.13) {$\mathcal D_t$};
 \draw[arr,draw=io] (.96,8.63) -- (1.42,8.63);
 \node[tinylabel,draw=ib,fill=ib!7,minimum width=2.55cm,minimum height=.55cm]
-  at (2.77,8.63) {\textbf{F} ViT tiền huấn luyện};
+  at (2.77,8.63) {\snowmark\ ViT tiền huấn luyện};
 \node[tinylabel,draw=io,fill=io!9,minimum width=4.0cm,minimum height=.55cm]
-  at (6.25,8.63) {\textbf{T} $p_t$ hiện tại, các đầu $g$, $g_\omega$};
+  at (6.25,8.63) {\firemark\ $p_t$, các đầu $g$, $g_\omega$};
 \node[tinylabel,text=black!60] at (4.14,8.63) {$+$};
 \node[tinylabel,draw=ib,fill=ib!7,minimum width=2.65cm,minimum height=.55cm]
-  at (10.45,8.63) {\textbf{F} Các bộ điều hợp cũ $p_{<t}$};
-\node[tinylabel,text=black!65] at (6.5,8.15)
-  {Học PET trước; sau đó đóng băng khi khớp RP và suy luận};
+  at (10.45,8.63) {\snowmark\ Các $p_{<t}$ cũ};
 \draw[black!20,line width=.35pt] (0,7.88) -- (12.1,7.88);
-\node[heading,text=ib] at (0,7.49) {(b) Suy luận (tất cả cố định)};
-\node[tinylabel,anchor=east,text=black!60] at (12.1,7.49)
-  {Cùng ảnh $x$; dùng chung trọng số ViT và đầu thích nghi $g$};
+\node[heading,text=ib] at (0,7.49) {(b) \snowmark\ Suy luận};
 % Main inference lane.
 \node[inner sep=0pt] (input) at (.52,6.15)
   {\mallardimage{.94cm}};
@@ -296,7 +310,7 @@ $10^{-6}$.
 \draw[arr] (2.50,6.15) -- node[tinylabel,above] {$u\mapsto t_0$} (3.48,6.15);
 \pic at (3.95,6.11) {vit={ib/$p_{t_0}$ + head $g$}};
 \node[tinylabel,draw=ib,fill=ib!12,inner sep=3pt] (adapter) at (3.95,7.00)
-  {\textbf{F} LoRA $p_{t_0}$};
+  {\snowmark\ LoRA $p_{t_0}$};
 \draw[arr] (adapter.south) -- (3.95,6.63);
 \draw[arr] (4.50,6.15) -- node[tinylabel,above] {$r$} (4.97,6.15);
 % Stage 1: both sources receive the same task-level reduction and scaling.
@@ -304,10 +318,9 @@ $10^{-6}$.
   (4.97,5.10) rectangle (6.55,6.82);
 \node[tinylabel,text=io] at (5.76,6.57) {\textbf{1 Định tuyến}};
 \draw[io!25] (5.10,6.36) -- (6.42,6.36);
-\node[tinylabel] at (5.76,5.78) {Max / tác vụ\\Điểm $z$\\Trộn $w$\\Argmax};
+\node[tinylabel] at (5.76,5.78) {Max / tác vụ $\rightarrow z$\\Trộn $w$\\Argmax};
 \draw[arr,draw=io] (6.55,6.15) -- node[tinylabel,above] {$\hat t_{\rm DRM}$} (7.56,6.15);
 \pic at (8.03,6.11) {vit={ib/DRM / CRM + $g$}};
-\node[tinylabel,text=ib] at (8.03,7.00) {Các lượt điều hợp\\có điều kiện};
 \draw[arr] (8.58,6.15) -- node[tinylabel,above] {$\ell$} (9.18,6.15);
 % Stage 2: the gate is internal, avoiding an extra crossing control wire.
 \draw[ir!70,fill=ir!5,rounded corners=3pt,line width=.7pt]
@@ -315,17 +328,17 @@ $10^{-6}$.
 \node[tinylabel,text=ir] at (10.105,6.57) {\textbf{2 Phân lớp}};
 \draw[ir!25] (9.31,6.36) -- (10.90,6.36);
 \node[tinylabel] at (10.105,5.78)
-  {Cổng từ $\ell$\\Điểm $z$\\Trộn $\beta_i$\\Đổi thang};
+  {Cổng$(\ell)$ $\rightarrow z$\\Trộn $\beta_i$\\Đổi thang};
 \draw[arr,draw=ir] (11.03,6.15) -- (11.41,6.15);
 \node[inner sep=0pt] at (11.79,6.15)
   {\mallardimage{.66cm}};
 \node[tinylabel,text=ir] at (11.79,5.50) {$\hat y$:\\Mallard};
 % Second lane: RP features, expansion and class-score profile.
-\node[heading,text=it] at (.20,4.82) {Nhánh RP cố định};
-\node[tinylabel,text=it,anchor=west] at (2.98,4.82) {$p_1$ đóng băng; thêm một lượt};
+\node[heading,text=it] at (.20,4.82)
+  {\snowmark\ Nhánh RP: $p_1$, thêm một lượt};
 \draw[arr,draw=it] (input.south) -- (.52,5.18) -- (.07,5.18) --
   (.07,3.89) -- (1.48,3.89);
-\pic at (1.95,3.85) {vit={it/$p_1$ cố định}};
+\pic at (1.95,3.85) {vit={it/\snowmark\ $p_1$}};
 \draw[arr,draw=it] (2.50,3.89) -- (2.99,3.89);
 \foreach \k/\tone in {0/20,1/65,2/40,3/85}{
   \fill[it!\tone] (3.10,{3.52+.18*\k}) rectangle ++(.21,.17);
@@ -333,7 +346,7 @@ $10^{-6}$.
 \node[tinylabel,text=it] at (3.21,3.20) {$f$\\768};
 \draw[arr,draw=it] (3.43,3.89) -- (3.89,3.89);
 \pic at (4.43,3.89) {net};
-\node[tinylabel,text=it] at (4.43,3.20) {\textbf{F} $W^\top$\\ReLU};
+\node[tinylabel,text=it] at (4.43,3.20) {\snowmark\ $W^\top$\\ReLU};
 \draw[arr,draw=it] (4.98,3.89) -- (5.37,3.89);
 \foreach \k in {0,...,7}{
   \pgfmathtruncatemacro{\tone}{12+mod(31*\k,75)}
@@ -347,7 +360,7 @@ $10^{-6}$.
   \fill[ip!75] (\pos,3.63) rectangle ++(.15,\height);
 }
 \draw[ip!70,line width=.3pt] (7.62,3.61) -- (8.88,3.61);
-\node[tinylabel,text=ip] at (8.255,3.12) {Điểm lớp $s$};
+\node[tinylabel,text=ip] at (8.255,3.12) {Điểm $s$};
 \foreach \pos/\lab in {7.765/1,8.085/2,8.405/3,8.725/4}{
   \node[font=\fontsize{6}{7}\selectfont,text=ip,inner sep=0pt]
     at (\pos,3.44) {$c_{\lab}$};
@@ -356,47 +369,45 @@ $10^{-6}$.
 \draw[arr,draw=ip] (8.98,3.89) -- (10.105,3.89) -- (10.105,5.10);
 \draw[arr,draw=ip] (9.10,3.89) -- (9.10,4.48) -- (5.76,4.48) -- (5.76,5.10);
 \fill[ip] (9.10,3.89) circle (.04);
-\node[tinylabel,text=ip,fill=white,inner sep=2pt] at (7.14,4.48) {tái dùng cùng $s$};
+\node[tinylabel,text=ip,fill=white,inner sep=2pt] at (7.14,4.48) {cùng $s$};
 % Third lane: current-task fitting, not inference-time learning from test images.
 \draw[black!20,line width=.35pt] (0,2.87) -- (12.1,2.87);
-\node[heading,text=it] at (0,2.60) {(c) Khớp RP trên tác vụ hiện tại: chỉ cập nhật thống kê và trọng số đầu ra};
+\node[heading,text=it] at (0,2.60)
+  {(c) \analyticmark\ Cập nhật RP trên tác vụ hiện tại};
 \foreach \dx/\dy in {.10/.10,.05/.05,0/0}{
   \node[inner sep=1pt,draw=it!65,fill=white] at ({.53+\dx},{1.43+\dy})
     {\mallardimage{.68cm}};
 }
 \node[tinylabel] at (.57,.83) {$(x,y)\in\mathcal D_t$};
 \draw[arr,draw=it] (1.01,1.46) -- (1.48,1.46);
-\pic[scale=.80] at (1.91,1.42) {vit={it/$p_1$ cố định}};
+\pic[scale=.80] at (1.91,1.42) {vit={it/\snowmark\ $p_1$}};
 \draw[arr,draw=it] (2.39,1.46) -- (2.76,1.46);
 \pic[scale=.75] at (3.19,1.46) {net};
-\node[tinylabel,text=it] at (3.19,.70) {\textbf{F} $W^\top$\\ReLU};
+\node[tinylabel,text=it] at (3.19,.70) {\snowmark\ $W^\top$\\ReLU};
 \draw[arr,draw=it] (3.63,1.46) -- node[tinylabel,above] {$h$} (4.16,1.46);
 \node[tinylabel,draw=ip!65,fill=ip!5,rounded corners=2pt,inner sep=4pt,minimum width=2.25cm]
-  (gram) at (5.57,1.83) {\textbf{A}\quad $G\leftarrow G+hh^\top$};
+  (gram) at (5.57,1.83) {\analyticmark\quad $G\leftarrow G+hh^\top$};
 \node[tinylabel,draw=ip!65,fill=ip!5,rounded corners=2pt,inner sep=4pt,minimum width=2.25cm]
-  (cross) at (5.57,1.06) {\textbf{A}\quad $C\leftarrow C+h\mathbf e_y^\top$};
+  (cross) at (5.57,1.06) {\analyticmark\quad $C\leftarrow C+h\mathbf e_y^\top$};
 \draw[arr,draw=ip] (4.16,1.46) |- (gram.west);
 \draw[arr,draw=ip] (4.16,1.46) |- (cross.west);
 \draw[arr,draw=it,dashed] (.57,.62) -- (.57,.29) --
-  node[tinylabel,below,pos=.53] {nhãn quan sát $y$ (chỉ huấn luyện)}
+  node[tinylabel,below,pos=.53] {nhãn $y$}
   (5.57,.29) -- (cross.south);
 \node[tinylabel,draw=ip!65,fill=ip!5,rounded corners=2pt,inner sep=5pt]
-  (ridge) at (8.65,1.44) {\textbf{A} Giải ridge\\$(G+\lambda I)W_{\rm out}=C$};
+  (ridge) at (8.65,1.44) {\analyticmark\ Ridge\\$(G+\lambda I)W_{\rm out}=C$};
 \draw[arr,draw=ip] (gram.east) -- (6.99,1.83) |- (ridge.west);
 \draw[arr,draw=ip] (cross.east) -- (6.99,1.06) |- (ridge.west);
-\node[tinylabel,text=black!65] at (8.65,.70) {Không cập nhật gradient};
 \draw[arr,draw=ip] (ridge.east) -- (10.35,1.44);
 \pic at (10.84,1.44) {matrix={ip/$W_{\rm out}$}};
 % Parameter reuse is labelled rather than threaded through the diagram's lanes.
-\node[tinylabel,text=ip] at (10.84,2.14) {dùng trong (b)};
+\node[tinylabel,text=ip] at (10.84,2.14) {tới (b)};
 \end{tikzpicture}
-\caption{Vòng đời tham số và hợp nhất hai tầng. (a) Quy trình PET kế thừa
-huấn luyện bộ điều hợp/các đầu, không huấn luyện mạng xương sống. (b) Mọi
-mô-đun đều cố định: Tầng 1 sửa đề xuất DRM; Tầng 2 đặt cổng cho hợp nhất lớp
-bằng $\ell$. Một vector điểm RP phục vụ cả hai tầng. (c) Dữ liệu huấn luyện
-hiện tại cập nhật giải tích $G,C,W_{\rm out}$ với $p_1,W$ cố định. Chỉ các
-lớp/tác vụ đã thấy tham gia. Ảnh và cột chỉ minh họa, không phải dự đoán đo
-được. Ảnh: T.~G.~Barnes/USFWS (phạm vi công cộng).}
+\caption{Vòng đời tham số và hợp nhất hai tầng. (a) Huấn luyện các mô-đun PET
+hiện tại. (b) Cùng điểm RP cố định $s$ sửa đề xuất tác vụ DRM và hỗ trợ hợp
+nhất lớp có cổng biên. (c) Dữ liệu tác vụ hiện tại cập nhật
+$G,C,W_{\rm out}$ bằng ridge dạng đóng, không phát lại dữ liệu hay dùng
+gradient. Ảnh: T.~G.~Barnes/USFWS (phạm vi công cộng).}
 \label{fig:pipeline}
 \end{figure}
 
