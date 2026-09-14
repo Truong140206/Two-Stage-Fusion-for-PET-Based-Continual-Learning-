@@ -53,11 +53,28 @@
     }%
   }%
 }
+% Hien thi tieu de tom tat can giua theo kieu cua ban nop.
+\renewenvironment{abstract}{%
+  \par\addvspace{.35cm}%
+  \begin{center}\large\bfseries\abstractname\end{center}%
+  \vspace{-.5em}%
+  \list{}{\small
+    \setlength{\leftmargin}{1cm}%
+    \setlength{\rightmargin}{1cm}%
+    \setlength{\labelwidth}{0pt}%
+    \setlength{\listparindent}{0pt}%
+    \setlength{\itemindent}{0pt}%
+    \setlength{\topsep}{0pt}%
+    \setlength{\partopsep}{0pt}%
+    \setlength{\parsep}{0pt}%
+    \setlength{\itemsep}{0pt}}%
+  \item\relax
+}{\endlist}
 %
 \begin{document}
 %
 \renewcommand{\andname}{và}
-\renewcommand{\abstractname}{Tóm tắt.}
+\renewcommand{\abstractname}{Tóm tắt}
 \renewcommand{\keywordname}{{\bf Từ khóa:}}
 \renewcommand{\figurename}{Hình}
 \renewcommand{\tablename}{Bảng}
@@ -86,22 +103,21 @@ Hà Nội, Việt Nam\\
 \thispagestyle{empty}
 %
 \begin{abstract}
-Các hệ học liên tục hiệu quả tham số dùng bộ điều hợp riêng cho từng tác vụ
-phải lựa chọn bộ điều hợp khi không biết định danh tác vụ, trong khi định tuyến
-tốt hơn chưa chắc dẫn tới phân lớp tốt hơn. Chúng tôi đề xuất hợp nhất điểm số
-hai tầng bằng một đầu chiếu ngẫu nhiên (RP), được khớp bằng hồi quy ridge trên
-đặc trưng LoRA cố định của tác vụ đầu tiên. Các thống kê của đầu này được cộng
-dồn qua các tác vụ mà không lưu mẫu cũ hay thay đổi việc huấn luyện bộ điều hợp
-theo tác vụ. Cùng một điểm RP được dùng tại hai điểm quyết định: hợp nhất đề
-xuất tác vụ trước khi đối sánh lại và hợp nhất lớp có cổng biên sau đó.
-Trên ba bộ chuẩn và bốn seed, phương pháp tăng độ chính xác đề xuất DRM
-$1.10$--$2.26$ điểm phần trăm và độ chính xác phân lớp $0.69$--$1.50$ điểm.
-Một lưới một seed trên bốn bộ dữ liệu và năm thiết lập tiền huấn luyện cho thấy
-độ chính xác tăng ở cả hai mươi phép so sánh. Các đối chứng cùng đặc trưng và
-ablation có điều kiện tách đóng góp của bộ phân lớp RP khỏi tác động của định
-tuyến và cổng. Các tác động phụ thuộc bộ dữ liệu và cấu hình hợp nhất; không
-thành phần nào luôn có lợi. Kết quả ủng hộ cải thiện dự đoán, nhưng không cho
-thấy sự giảm nhất quán của quên hay suy giảm chuyển giao ngược.
+Học liên tục hiệu quả tham số có thể bảo toàn mạng xương sống tiền huấn luyện
+bằng cách gán các bộ điều hợp gọn nhẹ cho những tác vụ lần lượt xuất hiện. Tuy
+nhiên, trong thiết lập không biết tác vụ, suy luận gắn hai quyết định khác nhau:
+lựa chọn bộ điều hợp và nhận dạng một lớp trong toàn bộ các lớp đã thấy. Hai
+quyết định này không tương đương, nên sửa định tuyến có thể không đổi kết quả
+phân lớp hoặc làm hỏng một dự đoán vốn đã đúng. Chúng tôi xử lý sự lệch này bằng
+một khung hợp nhất hai tầng, bổ sung vào pipeline dựa trên bộ điều hợp một đầu
+ridge chiếu ngẫu nhiên (RP) mang bằng chứng bổ trợ. Đầu RP hoạt động trong một
+không gian đặc trưng cố định và được cập nhật từ các thống kê bậc hai cộng dồn,
+không lưu mẫu cũ và không thêm cập nhật gradient cho các bộ điều hợp hiện có.
+Điểm RP trước hết sửa đề xuất tác vụ trước bước đối sánh lại, sau đó hỗ trợ hợp
+nhất có xét độ tin cậy với logit lớp cuối. Đánh giá trên nhiều bộ dữ liệu, seed
+và thiết lập tiền huấn luyện xem xét riêng định tuyến, phân lớp và khả năng ghi
+nhớ, qua đó cho thấy hai nguồn bằng chứng bổ sung cho nhau nhưng tác động vẫn
+phụ thuộc cấu hình.
 
 \keywords{Học liên tục \and Tinh chỉnh hiệu quả tham số \and Định tuyến tham số
 \and Chiếu ngẫu nhiên \and Hợp nhất tín hiệu.}
@@ -481,15 +497,19 @@ các tác vụ đã thấy ở Tầng 1 và các lớp đã thấy ở Tầng 2,
 \subsubsection{Tầng thứ nhất: hợp nhất ở cấp định tuyến.}
 Tầng 1 chạy sau lượt thích nghi ban đầu và trước DRM. Đầu vào là $r$, tức logit
 của đầu dùng chung dưới bộ điều hợp được TII trần chọn, không phải logit phụ
-$u$. Cả $r$ và điểm RP $s$ được ánh xạ về tác vụ đã thấy bằng
-$r^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} r_c$ and
-$s^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} s_c$ for
-$t=1,\dots,\hat{T}$, trong đó $\hat{T}$ là số tác vụ đã thấy; lớp thuộc tác
+$u$. Cả $r$ và điểm RP $s$ được ánh xạ về các tác vụ đã thấy bằng
+\begin{align*}
+r^{\mathrm{task}}_t &= \max_{c \in \mathcal{C}_t} r_c,\\
+s^{\mathrm{task}}_t &= \max_{c \in \mathcal{C}_t} s_c .
+\end{align*}
+Ở đây $t=1,\dots,\hat{T}$, trong đó $\hat{T}$ là số tác vụ đã thấy; lớp thuộc tác
 vụ chưa thấy không tham gia phép cực đại nào. Hai vector được trộn sau chuẩn hóa:
 \begin{equation}
-\mathrm{fused} = w\, z(r^{\mathrm{task}}) + (1-w)\, z(s^{\mathrm{task}}),
-\qquad
-\hat{t}_{\rm DRM} = \arg\max_t\, \mathrm{fused}_t .
+\begin{aligned}
+\mathrm{fused} &= w\, z(r^{\mathrm{task}})
+                 + (1-w)\, z(s^{\mathrm{task}}), \qquad w=0.7,\\
+\hat{t}_{\rm DRM} &= \arg\max_t\, \mathrm{fused}_t .
+\end{aligned}
 \label{eq:route}
 \end{equation}
 Khi mới thấy một tác vụ, độ lệch chuẩn bằng không nên ngưỡng dưới giữ phép tính

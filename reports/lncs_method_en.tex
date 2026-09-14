@@ -40,10 +40,28 @@
 % The photograph lives in figure_assets/ in the repository; Overleaf expects it
 % beside the source, so the path is searched in both places.
 \graphicspath{{./}{figure_assets/}}
+% Display the abstract title as a centred heading, matching the submission style.
+\renewenvironment{abstract}{%
+  \par\addvspace{.35cm}%
+  \begin{center}\large\bfseries\abstractname\end{center}%
+  \vspace{-.5em}%
+  \list{}{\small
+    \setlength{\leftmargin}{1cm}%
+    \setlength{\rightmargin}{1cm}%
+    \setlength{\labelwidth}{0pt}%
+    \setlength{\listparindent}{0pt}%
+    \setlength{\itemindent}{0pt}%
+    \setlength{\topsep}{0pt}%
+    \setlength{\partopsep}{0pt}%
+    \setlength{\parsep}{0pt}%
+    \setlength{\itemsep}{0pt}}%
+  \item\relax
+}{\endlist}
 %
 \begin{document}
 %
 % No \renewcommand block here: llncs already labels everything in English.
+\renewcommand{\abstractname}{Abstract}
 %
 \title{Two-Stage Fusion for Routing and Classification in
 Parameter-Efficient Continual Learning}
@@ -66,22 +84,22 @@ Vietnam National University, Hanoi, Vietnam\\
 \thispagestyle{empty}
 %
 \begin{abstract}
-Task-specific parameter-efficient continual learners must select adapters
-without knowing the task identity, and better routing need not yield better
-classification. We propose two-stage score fusion using a random-projection
-(RP) head fitted by ridge regression over fixed first-task LoRA features.
-Its statistics accumulate across tasks without retaining examples or changing
-task-specific adapter training. The same RP scores serve two decision points:
-task-proposal fusion before re-matching and margin-gated class fusion afterwards.
-Across three benchmarks and four seeds, the method improves DRM-proposal
-accuracy by $1.10$--$2.26$ percentage points and classification accuracy by
-$0.69$--$1.50$. A single-seed grid across four datasets and five pre-training
-settings shows classification gains in all twenty comparisons. Matched-head
-controls and conditional ablations distinguish the RP classifier's contribution
-from the effects of routing and gating. These effects depend on the dataset
-and fusion configuration; neither component is uniformly beneficial.
-The results support improved prediction, not a consistent reduction in
-forgetting or backward-transfer loss.
+Parameter-efficient continual learning can preserve a pre-trained backbone by
+assigning compact adapters to incoming tasks. In the task-agnostic setting,
+however, inference couples two distinct decisions: selecting an adapter and
+recognising a class among all classes seen so far. These decisions are not
+equivalent, so a routing correction may leave classification unchanged or
+disrupt a prediction that was already correct. We address this mismatch with a
+two-stage fusion framework that augments the adapter-based pipeline with a
+complementary random-projection (RP) ridge head. The RP head operates in a
+fixed feature space and is updated from accumulated second-order statistics,
+without retaining past examples or introducing additional gradient updates to
+existing adapters. Its scores are reused first to refine the task proposal
+before re-matching and then to support confidence-aware fusion with the final
+class logits. Evaluation across multiple datasets, seeds and pre-training
+settings examines routing, classification and retention separately, showing
+that the two evidence sources are complementary while their effects remain
+configuration-dependent.
 
 \keywords{Continual learning \and Parameter-efficient tuning \and Parameter
 routing \and Random projection \and Signal fusion.}
@@ -460,14 +478,18 @@ over seen tasks in Stage 1 and seen classes in Stage 2, excluding unseen entries
 Stage 1 runs after the initial adapted pass and before DRM. Its input is $r$,
 the shared-head logits under the adapter selected by bare TII, not auxiliary
 logits $u$. Both $r$ and RP scores $s$ are mapped to seen tasks by
-$r^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} r_c$ and
-$s^{\mathrm{task}}_t = \max_{c \in \mathcal{C}_t} s_c$ for
-$t = 1,\dots,\hat{T}$, with $\hat{T}$ the number of tasks seen so far; classes
+\begin{align*}
+r^{\mathrm{task}}_t &= \max_{c \in \mathcal{C}_t} r_c,\\
+s^{\mathrm{task}}_t &= \max_{c \in \mathcal{C}_t} s_c .
+\end{align*}
+Here $t = 1,\dots,\hat{T}$, with $\hat{T}$ the number of tasks seen so far; classes
 of unseen tasks never enter either maximum. The two vectors are blended after standardisation:
 \begin{equation}
-\mathrm{fused} = w\, z(r^{\mathrm{task}}) + (1-w)\, z(s^{\mathrm{task}}),
-\qquad
-\hat{t}_{\rm DRM} = \arg\max_t\, \mathrm{fused}_t .
+\begin{aligned}
+\mathrm{fused} &= w\, z(r^{\mathrm{task}})
+                 + (1-w)\, z(s^{\mathrm{task}}), \qquad w=0.7,\\
+\hat{t}_{\rm DRM} &= \arg\max_t\, \mathrm{fused}_t .
+\end{aligned}
 \label{eq:route}
 \end{equation}
 For one seen task the standard deviation is zero, so the floor keeps the
