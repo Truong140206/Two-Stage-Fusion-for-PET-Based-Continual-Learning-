@@ -1,5 +1,36 @@
 # Fixed full-w=0.6 comparison (2026-09-14)
 
+## Completed evidence
+
+The batch completed with marker FULL_W06_MAIN_COMPLETE=12/12; PAPER_UNCHANGED:
+four verified ImageNet-R runs were reused and eight CIFAR-100/CUB-200
+evaluations were newly completed. The eight new evaluations took 2441.137
+seconds in total (about 40.7 minutes). All twelve checkpoint protocol and
+fixed-feature checks passed. Summary: OUT/full_w06_main_v1__summary.json.
+
+Full w=.6 versus Full w=.7, paired over seeds 42--45:
+
+| Dataset | w=.6 Acc@1 | w=.7 Acc@1 | paired difference [95% t interval] |
+|---|---:|---:|---:|
+| ImageNet-R | 75.288 | 75.180 | +0.108 [-0.064, +0.280] |
+| CIFAR-100 | 90.455 | 90.473 | -0.017 [-0.053, +0.018] |
+| CUB-200 | 87.900 | 87.878 | +0.022 [-0.024, +0.067] |
+
+No primary Acc@1 interval excludes zero and the direction is not consistent.
+Acc@task rises by +.332 on ImageNet-R and +.137 on CUB-200, but this does
+not translate into a reliable class-accuracy improvement. Forgetting and
+Backward differences are near zero and every interval includes zero. Loss is
+slightly worse for w=.6 on CIFAR-100 (+.00205) and CUB-200 (+.00075), with
+their paired intervals above zero.
+
+Decision: retain w=.7 as the Full reporting configuration. Do not migrate the
+paper, backbone grid, ablations, diagnostics or AugReg comparison to w=.6.
+The existing sensitivity paragraph already reports w=.6 as the observed
+ImageNet-R grid maximum and explicitly says it is not a selected optimum.
+This completed multi-dataset check strengthens the decision not to select w=.6
+from a small test-set gain. No further w=.6 evaluation is required before
+submission.
+
 Paper checkpoint: 7c360a8, unchanged until new evidence is received and audited.
 No automatic winner selection or replacement of manuscript cells.
 

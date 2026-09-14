@@ -1,5 +1,22 @@
 # Checkpoint review — 2026-09-10
 
+## Full w=.6 decision — 2026-09-14
+
+The fixed three-dataset/four-seed comparison completed (12/12): reused four
+verified ImageNet-R runs and evaluated eight missing CIFAR/CUB runs in 40.7
+minutes. Independent recomputation matches the generated summary. Paired
+w=.6-minus-.7 Acc@1 differences and 95% t intervals are ImageNet-R
++.108 [-.064,+.280], CIFAR-100 -.017 [-.053,+.018], and CUB-200
++.022 [-.024,+.067]. No interval excludes zero; the direction is not
+consistent. Forgetting/Backward differences are also unresolved. Although
+Acc@task improves on ImageNet-R and CUB, loss is slightly worse on CIFAR/CUB.
+
+Decision: keep Full at w=.7. The paper remains at commit 7c360a8 and does not
+mix configurations. No backbone-grid, ablation, diagnostic or AugReg reruns
+are warranted for w=.6. Raw summary on the lab:
+hrm-pet-output/full_w06_main_v1__summary.json. Runner/protocol checkpoint:
+aa5d027. See reports/full_w06_protocol.md for exact means and caveats.
+
 ## Supervisor-feedback revision — 2026-09-14
 
 Canonical TeX/PDF edited in place; previous version remains in commit b1e200e.
