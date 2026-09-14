@@ -1,5 +1,60 @@
 # Checkpoint review — 2026-09-10
 
+## Supervisor-feedback revision — 2026-09-14
+
+Canonical TeX/PDF edited in place; previous version remains in commit b1e200e.
+No model, training, evaluation, experiment launcher or result files changed.
+
+- Merged the two main tables into Table 1, with separate evidence groups for
+  published three-seed results, matched four-seed runs, the seed-42 grid and
+  the completed exploratory AugReg comparison. No cross-protocol ranking.
+- Added only the completed order-1993 comparison: RanPAC 77.44, matched HRM-PET
+  77.42, Full 79.14 final task-balanced Acc@1. Same pretrained weights, images
+  and class order; different training budgets. Orders 1994/1995 remain pending.
+- Added paired-difference bar charts with 95% t intervals from four paired
+  seeds, and a line chart containing all nine weight-grid cells. No new data.
+- Explicitly state that w=0.6 is the observed grid maximum, while w=0.7 remains
+  the existing common reporting configuration, not an optimum. The four-seed
+  classification contrast includes zero; test-informed development is disclosed.
+- Shortened Related Work and retained attribution to HRM-PET and RanPAC.
+  The method interface is defined at the start of Method rather than introduced
+  as a long baseline exposition. No attempt to disguise source methodology.
+- Pipeline now separates gradient training, frozen inference and analytic RP
+  fitting, with F/T/A labels. One RP score vector feeds both fusion stages.
+- Kept all ablations, including those exceeding Full. Bold identifies the
+  highest within-column mean, not statistical significance.
+- Standardized tables, labels and reference metadata. Added verified page
+  ranges/DOIs and completed DualPrompt's author list.
+
+Validation: all 32 quoted main-table values, four-seed mean/SD values, grid
+and ablation values, 12 chart means/intervals and nine weight points PASS
+against the pre-edit manuscript. All 30 bibliography keys are cited; all
+labels/references resolve. PDF has 12 content + 2 reference pages. XeLaTeX
+twice PASS, embedded fonts, actual JPEG asset, no missing glyph/image,
+undefined reference or overfull box. One underfull vertical box and the
+existing amsmath vec warning remain nonfatal; visual review of all 14 final
+pages found no overlap or clipping.
+
+Overleaf package: D:/Hybrid_ReMatching_code/overleaf_submission.zip contains
+the TeX, LLNCS class, JPEG, source attribution and compiler instructions.
+Compiled twice from a clean extraction: 14 pages. This is local XeLaTeX
+validation, not a claim of testing the hosted Overleaf browser renderer.
+
+Primary sources revisited include:
+- SOICT limit: https://soict.org/submission/paper-submission/
+- HRM-PET Table 1: https://papers.nips.cc/paper_files/paper/2025/file/a978bdfeb195e4a574c0def98806346a-Paper-Conference.pdf
+- RanPAC: https://proceedings.neurips.cc/paper_files/paper/2023/hash/2793dc35e14003dd367684d93d236847-Abstract-Conference.html
+- APER: https://link.springer.com/article/10.1007/s11263-024-02218-0
+- DLEPEM: https://www.mdpi.com/2076-3417/16/12/6153
+- CPrompt: https://openaccess.thecvf.com/content/CVPR2024/html/Gao_Consistent_Prompting_for_Rehearsal-Free_Continual_Learning_CVPR_2024_paper.html
+- LAE: https://openaccess.thecvf.com/content/ICCV2023/html/Gao_A_Unified_Continual_Learning_Framework_with_General_Parameter-Efficient_Tuning_ICCV_2023_paper.html
+
+This revision does not establish reduced forgetting, universal ablation
+superiority, independent validation, matched compute or multi-order RanPAC
+superiority. Those limitations remain explicit. No numerical rerun is needed
+for these editorial changes; the separately approved two-order extension is
+still subject to lab disk/GPU availability.
+
 ## Evidence-focused revision within page limit — 2026-09-13
 
 User approved the three proposed improvements while retaining the submission

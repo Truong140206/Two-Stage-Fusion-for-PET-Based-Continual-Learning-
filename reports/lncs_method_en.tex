@@ -25,6 +25,13 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{url}
+\usepackage{booktabs}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\definecolor{plotblue}{RGB}{43,99,151}
+\definecolor{plotteal}{RGB}{23,126,110}
+\definecolor{plotpurple}{RGB}{111,79,156}
+\definecolor{plotorange}{RGB}{194,105,32}
 % The pipeline figure is drawn in TikZ, i.e. vector graphics, as the sample
 % recommends for diagrams and schematics.
 \usepackage{tikz}
@@ -61,10 +68,10 @@ Vietnam National University, Hanoi, Vietnam\\
 \begin{abstract}
 Task-specific parameter-efficient continual learners must select adapters
 without knowing the task identity, and better routing need not yield better
-classification. We augment HRM-PET with a complementary random-projection
+classification. We propose two-stage score fusion using a random-projection
 (RP) head fitted by ridge regression over fixed first-task LoRA features.
 Its statistics accumulate across tasks without retaining examples or changing
-the baseline's adapter training. The same RP scores serve two decision points:
+task-specific adapter training. The same RP scores serve two decision points:
 task-proposal fusion before re-matching and margin-gated class fusion afterwards.
 Across three benchmarks and four seeds, the method improves DRM-proposal
 accuracy by $1.10$--$2.26$ percentage points and classification accuracy by
@@ -95,8 +102,9 @@ In this family, task identity is unknown at inference and parameter selection
 is itself a prediction. A wrong adapter can produce unsuitable features.
 Larger pools, attention-weighted mixtures and explicit re-matching offer
 different responses to this difficulty~\cite{ref_l2p,ref_coda,ref_hrmpet}.
-We focus on HRM-PET, where routing and classification use related predictions
-from the adapted and unadapted backbone.
+Yet selecting a more suitable adapter and predicting the correct class are
+different objectives: a shared classifier can recover from a routing error,
+while a routing change can also disturb an already correct prediction.
 
 We add a complementary predictor: first-task adapter features, a frozen random
 projection and a ridge classifier fitted from accumulated statistics, following
@@ -106,14 +114,11 @@ re-matching and blend with final class logits, with greater weight when the
 primary classifier's top-two margin narrows.
 
 \subsubsection{Contributions.}
-Our contribution is the integration and evaluation of a shared analytic
-predictor at two decision points, not a new ridge-learning algorithm.
-First, we introduce task-proposal fusion before re-matching and margin-gated
-class fusion afterwards, reusing one RP head. Second, matched-feature controls
-and four-seed conditional ablations test whether routing and gating add value
-beyond class fusion alone. Third, a four-dataset, five-pre-training grid and
-weight-sensitivity study examine the scope of the gains. We distinguish
-classification improvements from retention effects and oracle complementarity
+We contribute (i) a shared RP predictor for task-proposal and margin-gated class
+fusion, (ii) matched-feature controls and four-seed conditional ablations, and
+(iii) a four-dataset, five-pre-training study with weight sensitivity.
+The novelty is the two-point integration and its evaluation, not ridge learning.
+We distinguish classification gains from retention and oracle complementarity
 from achieved corrections.
 
 \section{Related Work}
@@ -153,38 +158,13 @@ LUCIR~\cite{ref_lucir} normalises features and weights. Our fusion leaves the
 adapters, auxiliary classifier and shared head fixed. It retains no exemplars
 but requires current-task data to fit the RP head.
 
-\subsection{HRM-PET: The Baseline We Build On}
-\label{sec:baseline}
-
-We use the released HRM-PET~\cite{ref_hrmpet} inference path. Its two
-re-matching stages provide the decision points that our method augments.
-
-\subsubsection{Task-identity inference (TII).}
-The \emph{bare} backbone $\phi$, without an adapter, produces
-$q(x)=\phi(x;\theta_{\mathrm{ptm}})$. A cross-entropy-trained auxiliary classifier
-gives logits $u=g(q(x);\theta_\omega)$ and the initial task match
-$t_0=\mathcal T(\arg\max_c u_c)$.
-
-\subsubsection{Re-matching (DRM and CRM).}
-The first adapted pass attaches $p_{t_0}$ and produces
-$r=g_{\theta_g}(\phi(x;p_{t_0},\theta_{\rm ptm}))$. DRM proposes the task of
-$\arg\max r$ and evaluates its adapter when it differs from $t_0$; our fusion
-modifies this proposal, not the preceding bare TII pass. CRM selects
-low-confidence samples from $r$ by the baseline's generalised-entropy threshold
-and compares the current logits, under the baseline log-sum-exp score, with the
-adapter of the second-ranked class of $r$; it is confidence-triggered, not
-restricted to cases where the two task identities agree. Both reuse trained
-modules, can require further adapter forwards, and are heuristics: neither
-guarantees that accuracy cannot decrease.
-
-\subsubsection{Shared classification head.}
-Each adapted pass uses the same classification head over all seen classes.
-Let $\ell\in\mathbb{R}^{|\mathcal Y|}$ denote the logits retained after
-re-matching, predicting $\hat y=\arg\max_c\ell_c$; unseen classes are masked
-with $-\infty$. CRM may replace these logits without updating the task
-identity recorded by the evaluator (Sect.~\ref{sec:setup}).
-The baseline therefore leaves two opportunities for complementary evidence:
-revising the DRM proposal and revising the final class prediction.
+\subsubsection{Remaining challenge.}
+Prompt/classifier inconsistency between training and testing can degrade
+prediction~\cite{ref_cprompt}; re-matching addresses parameter selection but
+does not supply an independent class predictor. We adopt the re-matching
+interface of HRM-PET~\cite{ref_hrmpet}, retaining its adapter and classifier
+training, and test complementary RP evidence before and after re-matching.
+This differs from replacing adapter selection with an analytic classifier.
 
 \section{Method}
 \label{sec:method}
@@ -207,8 +187,15 @@ RP branch is independent of the inferred task.
 
 We distinguish four class-score vectors: bare TII scores $u$, initial adapted
 shared-head logits $r$, final re-matched logits $\ell$, and RP scores $s$.
-The class-to-task map is $\mathcal T(\cdot)$; $t_0$ is the initial TII match and
-$\hat t_{\rm DRM}$ the task proposed for direct re-matching. We write
+The class-to-task map is $\mathcal T(\cdot)$. The auxiliary head $g_\omega$
+maps bare features to $u$, giving $t_0=\mathcal T(\arg\max_c u_c)$.
+The initial adapted pass gives $r=g(\phi(x;p_{t_0}))$.
+DRM evaluates its proposed adapter only if $\hat t_{\rm DRM}\ne t_0$.
+CRM uses the generalised-entropy confidence of $r$, tries the task of its
+second-ranked class, and retains logits according to log-sum-exp; it is not
+restricted to agreement between task proposals and does not run at task 1.
+All adapted passes share $g$; $\ell$ denotes the retained class logits.
+We write
 $z(\cdot)$ for per-sample standardisation with the population standard
 deviation floored at $10^{-6}$.
 
@@ -261,20 +248,36 @@ deviation floored at $10^{-6}$.
     }}
 ]
 % Three aligned lanes; fusion details stay inside their own coloured panels.
-\path[use as bounding box] (0,-.03) rectangle (12.1,7.70);
-\node[heading,text=ib] at (0,7.49) {(a) Inference};
+\path[use as bounding box] (0,-.03) rectangle (12.1,9.52);
+\node[heading,text=io] at (0,9.30) {(a) Learn PET modules on task $t$};
+\node[tinylabel,anchor=east,text=black!65] at (12.1,9.30)
+  {F: fixed \quad T: trainable \quad A: analytic update};
+\node[inner sep=0pt] at (.48,8.63) {\includegraphics[width=.72cm]{mallard.jpg}};
+\node[tinylabel] at (.48,8.13) {$\mathcal D_t$};
+\draw[arr,draw=io] (.96,8.63) -- (1.42,8.63);
+\node[tinylabel,draw=ib,fill=ib!7,minimum width=2.55cm,minimum height=.55cm]
+  at (2.77,8.63) {\textbf{F} Pretrained ViT};
+\node[tinylabel,draw=io,fill=io!9,minimum width=4.0cm,minimum height=.55cm]
+  at (6.25,8.63) {\textbf{T} Current $p_t$, heads $g$, $g_\omega$};
+\node[tinylabel,text=black!60] at (4.14,8.63) {$+$};
+\node[tinylabel,draw=ib,fill=ib!7,minimum width=2.65cm,minimum height=.55cm]
+  at (10.45,8.63) {\textbf{F} Earlier adapters $p_{<t}$};
+\node[tinylabel,text=black!65] at (6.5,8.15)
+  {Learn PET modules first; freeze them for the RP fit and inference below};
+\draw[black!20,line width=.35pt] (0,7.88) -- (12.1,7.88);
+\node[heading,text=ib] at (0,7.49) {(b) Inference (all fixed)};
 \node[tinylabel,anchor=east,text=black!60] at (12.1,7.49)
-  {One image; frozen backbone weights shared across passes};
+  {Same image $x$; shared ViT weights and adapted head $g$};
 % Main inference lane.
 \node[inner sep=0pt] (input) at (.52,6.15)
   {\includegraphics[width=.94cm]{mallard.jpg}};
 \node[tinylabel] at (.52,6.86) {Input $x$};
 \draw[arr] (1.04,6.15) -- (1.48,6.15);
-\pic at (1.95,6.11) {vit={ib/Bare TII}};
-\draw[arr] (2.50,6.15) -- node[tinylabel,above] {$t_0$} (3.48,6.15);
-\pic at (3.95,6.11) {vit={ib/Initial pass}};
+\pic at (1.95,6.11) {vit={ib/Bare ViT + $g_\omega$}};
+\draw[arr] (2.50,6.15) -- node[tinylabel,above] {$u\mapsto t_0$} (3.48,6.15);
+\pic at (3.95,6.11) {vit={ib/$p_{t_0}$ + head $g$}};
 \node[tinylabel,draw=ib,fill=ib!12,inner sep=3pt] (adapter) at (3.95,7.00)
-  {LoRA $p_{t_0}$};
+  {\textbf{F} LoRA $p_{t_0}$};
 \draw[arr] (adapter.south) -- (3.95,6.63);
 \draw[arr] (4.50,6.15) -- node[tinylabel,above] {$r$} (4.97,6.15);
 % Stage 1: both sources receive the same task-level reduction and scaling.
@@ -284,7 +287,7 @@ deviation floored at $10^{-6}$.
 \draw[io!25] (5.10,6.36) -- (6.42,6.36);
 \node[tinylabel] at (5.76,5.78) {Max / task\\$z$-score\\Mix $w$\\Argmax};
 \draw[arr,draw=io] (6.55,6.15) -- node[tinylabel,above] {$\hat t_{\rm DRM}$} (7.56,6.15);
-\pic at (8.03,6.11) {vit={ib/DRM / CRM}};
+\pic at (8.03,6.11) {vit={ib/DRM / CRM + $g$}};
 \node[tinylabel,text=ib] at (8.03,7.00) {Conditional\\adapter passes};
 \draw[arr] (8.58,6.15) -- node[tinylabel,above] {$\ell$} (9.18,6.15);
 % Stage 2: the gate is internal, avoiding an extra crossing control wire.
@@ -300,7 +303,7 @@ deviation floored at $10^{-6}$.
 \node[tinylabel,text=ir] at (11.79,5.50) {$\hat y$:\\Mallard};
 % Second lane: RP features, expansion and class-score profile.
 \node[heading,text=it] at (.20,4.82) {Fixed RP branch};
-\node[tinylabel,text=it,anchor=west] at (2.98,4.82) {one extra pass};
+\node[tinylabel,text=it,anchor=west] at (2.98,4.82) {frozen $p_1$; one extra pass};
 \draw[arr,draw=it] (input.south) -- (.52,5.18) -- (.07,5.18) --
   (.07,3.89) -- (1.48,3.89);
 \pic at (1.95,3.85) {vit={it/Fixed $p_1$}};
@@ -311,7 +314,7 @@ deviation floored at $10^{-6}$.
 \node[tinylabel,text=it] at (3.21,3.20) {$f$\\768};
 \draw[arr,draw=it] (3.43,3.89) -- (3.89,3.89);
 \pic at (4.43,3.89) {net};
-\node[tinylabel,text=it] at (4.43,3.15) {$W^\top$ + ReLU};
+\node[tinylabel,text=it] at (4.43,3.20) {\textbf{F} $W^\top$\\ReLU};
 \draw[arr,draw=it] (4.98,3.89) -- (5.37,3.89);
 \foreach \k in {0,...,7}{
   \pgfmathtruncatemacro{\tone}{12+mod(31*\k,75)}
@@ -337,7 +340,7 @@ deviation floored at $10^{-6}$.
 \node[tinylabel,text=ip,fill=white,inner sep=2pt] at (7.14,4.48) {reuse the same $s$};
 % Third lane: current-task fitting, not inference-time learning from test images.
 \draw[black!20,line width=.35pt] (0,2.87) -- (12.1,2.87);
-\node[heading,text=it] at (0,2.60) {(b) Fit on current task; keep statistics, not images};
+\node[heading,text=it] at (0,2.60) {(c) RP fit on current task: update statistics and output weights only};
 \foreach \dx/\dy in {.10/.10,.05/.05,0/0}{
   \node[inner sep=1pt,draw=it!65,fill=white] at ({.53+\dx},{1.43+\dy})
     {\includegraphics[width=.68cm]{mallard.jpg}};
@@ -347,35 +350,33 @@ deviation floored at $10^{-6}$.
 \pic[scale=.80] at (1.91,1.42) {vit={it/Fixed $p_1$}};
 \draw[arr,draw=it] (2.39,1.46) -- (2.76,1.46);
 \pic[scale=.75] at (3.19,1.46) {net};
-\node[tinylabel,text=it] at (3.19,.62) {$W^\top$ + ReLU};
+\node[tinylabel,text=it] at (3.19,.70) {\textbf{F} $W^\top$\\ReLU};
 \draw[arr,draw=it] (3.63,1.46) -- node[tinylabel,above] {$h$} (4.16,1.46);
 \node[tinylabel,draw=ip!65,fill=ip!5,rounded corners=2pt,inner sep=4pt,minimum width=2.25cm]
-  (gram) at (5.57,1.83) {$G\leftarrow G+hh^\top$};
+  (gram) at (5.57,1.83) {\textbf{A}\quad $G\leftarrow G+hh^\top$};
 \node[tinylabel,draw=ip!65,fill=ip!5,rounded corners=2pt,inner sep=4pt,minimum width=2.25cm]
-  (cross) at (5.57,1.06) {$C\leftarrow C+h\mathbf e_y^\top$};
+  (cross) at (5.57,1.06) {\textbf{A}\quad $C\leftarrow C+h\mathbf e_y^\top$};
 \draw[arr,draw=ip] (4.16,1.46) |- (gram.west);
 \draw[arr,draw=ip] (4.16,1.46) |- (cross.west);
 \draw[arr,draw=it,dashed] (.57,.62) -- (.57,.29) --
   node[tinylabel,below,pos=.53] {observed label $y$ (training only)}
   (5.57,.29) -- (cross.south);
 \node[tinylabel,draw=ip!65,fill=ip!5,rounded corners=2pt,inner sep=5pt]
-  (ridge) at (8.65,1.44) {Ridge solve\\$(G+\lambda I)W_{\rm out}=C$};
+  (ridge) at (8.65,1.44) {\textbf{A} Ridge solve\\$(G+\lambda I)W_{\rm out}=C$};
 \draw[arr,draw=ip] (gram.east) -- (6.99,1.83) |- (ridge.west);
 \draw[arr,draw=ip] (cross.east) -- (6.99,1.06) |- (ridge.west);
-\node[tinylabel,text=black!65] at (8.65,.70) {Closed-form fit};
+\node[tinylabel,text=black!65] at (8.65,.70) {No gradient updates};
 \draw[arr,draw=ip] (ridge.east) -- (10.35,1.44);
 \pic at (10.84,1.44) {matrix={ip/$W_{\rm out}$}};
 % Parameter reuse is labelled rather than threaded through the diagram's lanes.
-\node[tinylabel,text=ip] at (10.84,2.14) {used in (a)};
+\node[tinylabel,text=ip] at (10.84,2.14) {used in (b)};
 \end{tikzpicture}
-\caption{Two-stage fusion. All inference passes use the same image; adapted
-passes share head $g$. TII selects $t_0$; the projection $W$ is frozen.
-Stage 1 standardises task-wise maxima of $r$ and $s$;
-Stage 2 uses the top-two probability margin of $\ell$ for its continuous gate
-(Eqs.~\ref{eq:gate}--\ref{eq:affine}), then predicts by argmax.
-DRM runs if $\hat t_{\rm DRM}\ne t_0$; CRM uses low-confidence $r$ and its
-second-ranked class's task, comparing logits by log-sum-exp (not at task 1).
-Only seen classes/tasks participate; score bars are schematic.
+\caption{Parameter lifecycle and two-stage fusion. (a) The inherited PET
+recipe trains adapters/heads, not the backbone. (b) All modules are fixed:
+Stage 1 revises the DRM proposal; Stage 2 gates class fusion using $\ell$.
+One RP score vector serves both stages. (c) Current training data update
+$G,C,W_{\rm out}$ analytically with fixed $p_1,W$. Only seen classes/tasks
+participate. Photos/bars are schematic, not measured predictions.
 Photo: T.~G.~Barnes/USFWS (public domain).}
 \label{fig:pipeline}
 \end{figure}
@@ -384,7 +385,7 @@ Photo: T.~G.~Barnes/USFWS (public domain).}
 \label{sec:rp}
 
 We fit an RP head after each task and reuse its scores in two inference-time
-fusion operations. HRM-PET parameters are not retrained.
+fusion operations. The existing PET modules receive no additional gradient updates.
 Figure~\ref{fig:pipeline} distinguishes the initial adapted logits from the
 bare TII scores and shows both reuse paths.
 
@@ -394,9 +395,7 @@ $d=768$, are column vectors from ViT-B/16 with the first task's LoRA adapter
 unnormalised; changing adapters between tasks would mix incompatible spaces.
 
 \subsubsection{Projection and second-order statistics.}
-The feature is projected into a high-dimensional space of size $M = 10^4$ and
-passed through a nonlinearity, and the projected features are accumulated into
-two matrices:
+We expand $f$ to $M=10^4$ dimensions and retain two accumulated matrices:
 \begin{align}
 h &= \mathrm{ReLU}(W^\top f) \in \mathbb{R}^{M},
 \qquad W \in \mathbb{R}^{d \times M},\quad W_{jk}\sim\mathcal N(0,1),
@@ -457,8 +456,7 @@ of unseen tasks never enter either maximum. The two vectors are blended after st
 \begin{equation}
 \mathrm{fused} = w\, z(r^{\mathrm{task}}) + (1-w)\, z(s^{\mathrm{task}}),
 \qquad
-\hat{t}_{\rm DRM} = \arg\max_t\, \mathrm{fused}_t ,
-\qquad w = 0.7 .
+\hat{t}_{\rm DRM} = \arg\max_t\, \mathrm{fused}_t .
 \label{eq:route}
 \end{equation}
 For one seen task the standard deviation is zero, so the floor keeps the
@@ -502,10 +500,9 @@ $(1-\beta_i)^2+\beta_i^2+2\beta_i(1-\beta_i)\rho$, which need not equal one. At
 $\beta=0$ this stage leaves $\ell$ unchanged.
 
 \subsubsection{Cost.}
-At inference the head costs one extra adapter forward per sample, serving both
-stages. That is the head's own cost, not the pipeline's difference, which we did
-not measure: changing the DRM proposal can change the number of adapter
-evaluations.
+The head adds one adapter forward per sample, shared by both fusion stages.
+This is not measured total overhead: changing the DRM proposal can also change
+the number of adapter evaluations.
 
 Per task the head accumulates $G$ and $C$ over the current task's training split
 and solves one ridge system. Its stored arrays scale as
@@ -541,6 +538,10 @@ evaluation transform: resize to $256$, centre crop to $224$, and convert to a
 tensor; CIFAR additionally uses its configured channel normalisation. No
 test labels enter the fit. We use $M=10^4$, ReLU, $\lambda=10^4$, no additional
 RP feature normalisation or temperature calibration, and no fusion ramp.
+Unless noted otherwise, we report $w=0.7$ and $\beta=0.5$ throughout,
+not a dataset-wise best configuration. The joint sensitivity study in
+Sect.~\ref{sec:weights} includes the better observed $w=0.6$ setting; we do
+not retroactively select the main configuration on that test grid.
 Fusion starts at task 1; CRM retains \texttt{En=gen}, threshold $-10$, and the
 second-ranked class candidate. Training/evaluation scripts and dataset
 preprocessing are versioned in the code repository~\cite{ref_code}.
@@ -561,126 +562,146 @@ at stage $t$, the retention measures are
 \label{eq:metrics}
 \end{align}
 Both averages exclude the last task, and the maximum includes only stages at
-which task $i$ has been learned. Lower is better for Loss and Forgetting.
+which task $i$ has been learned. Lower is better for Loss and Forgetting;
+higher is better for accuracy and Backward (including when Backward is negative).
 
 \subsubsection{Reproducibility and sanity check.}
-$w=1$ restores the baseline DRM proposal and $\beta=0$ bypasses class fusion.
-With corrected unseen-class masking, this identity matches the baseline to
-logged precision at every stage for all three datasets and seeds 42--45.
-For example, ImageNet-R seed $42$ gives Acc@task $77.7914$, Acc@1 $74.0191$
-and Loss $1.2305$ in both paths. This checks that bypassing fusion restores
-the evaluated baseline, not that intermediate fusion operations are harmless.
-Re-evaluation confirmed the reported final accuracies of the main runs,
-controls, grids, ablations and diagnostics. Intermediate losses and retention
-changed in some earlier logs, including retention in ten full-method grid runs;
-corrected values are used throughout. All forty grid evaluations were checked;
-backbone/first-adapter feature tensors match across checkpoints in all
-main/grid checkpoint sets.
+With corrected unseen-class masking, $w=1,\beta=0$ recovers the unfused path
+to logged precision at every stage for all three datasets and seeds 42--45.
+For example, both paths give ImageNet-R seed-42 Acc@1 $74.0191$.
+This identity does not imply harmless intermediate fusion settings.
+Main runs, controls, grids, ablations and diagnostics were re-evaluated;
+corrected loss/retention values are used throughout. All forty grid evaluations
+and fixed backbone/first-adapter tensors were checked.
 
 \subsection{Main Results}
 \label{sec:results}
 
-Table~\ref{tab:main} reports all three datasets over four seeds. The change
-column is pairwise --- taken per seed, then averaged --- so its standard
-deviation describes the stability of the improvement, not the seeds' difficulty.
+Table~\ref{tab:main} combines published context and our controlled comparisons.
+Its groups have different seed sets and, in the last group, different pretrained
+weights; they must not be pooled into a single ranking. Published values are
+quoted from Table~1 of~\cite{ref_hrmpet}, not rerun here. S-Prompt++ and HiDe-LoRA
+are the variants evaluated in that benchmark.
 
-\begin{table}[htbp]
+\begin{table}[!t]
+\centering
 \footnotesize
-\setlength{\tabcolsep}{4pt}
-\caption{Final results, mean $\pm$ sample SD over seeds 42--45; Change is paired
-full minus baseline. Accuracy/retention are percentages (changes in points).}\label{tab:main}
-\begin{tabular}{llrrr}
-\hline
-Dataset & Metric & HRM-PET & Proposed & Change\\
-\hline
-\emph{ImageNet-R}
-& Acc@task   & $77.58 \pm 0.33$ & $79.85 \pm 0.18$ & $+2.264 \pm 0.158$\\
-& Acc@1      & $73.94 \pm 0.48$ & $75.18 \pm 0.24$ & $+1.236 \pm 0.416$\\
-& Acc@5      & $86.71 \pm 0.21$ & $88.02 \pm 0.17$ & $+1.312 \pm 0.148$\\
-& Loss       & $1.23 \pm 0.01$  & $1.19 \pm 0.01$  & $-0.040 \pm 0.002$\\
-& Forgetting & $3.36 \pm 0.56$  & $3.30 \pm 0.35$  & $-0.056 \pm 0.334$\\
-& Backward   & $-3.16 \pm 0.61$ & $-3.20 \pm 0.42$ & $-0.047 \pm 0.282$\\
-\emph{CIFAR-100}
-& Acc@task   & $89.77 \pm 0.11$ & $90.87 \pm 0.09$ & $+1.103 \pm 0.066$\\
-& Acc@1      & $89.78 \pm 0.03$ & $90.47 \pm 0.05$ & $+0.690 \pm 0.063$\\
-& Acc@5      & $98.65 \pm 0.03$ & $98.86 \pm 0.07$ & $+0.218 \pm 0.057$\\
-& Loss       & $0.39 \pm 0.00$  & $0.39 \pm 0.00$  & $-0.0003 \pm 0.0012$\\
-& Forgetting & $3.89 \pm 0.08$  & $3.74 \pm 0.12$  & $-0.150 \pm 0.095$\\
-& Backward   & $-3.87 \pm 0.07$ & $-3.74 \pm 0.11$ & $+0.136 \pm 0.095$\\
-\emph{CUB-200}
-& Acc@task   & $93.12 \pm 0.14$ & $94.34 \pm 0.10$ & $+1.226 \pm 0.149$\\
-& Acc@1      & $86.38 \pm 0.25$ & $87.88 \pm 0.27$ & $+1.495 \pm 0.353$\\
-& Acc@5      & $97.04 \pm 0.10$ & $97.44 \pm 0.13$ & $+0.400 \pm 0.103$\\
-& Loss       & $0.57 \pm 0.00$  & $0.53 \pm 0.01$  & $-0.036 \pm 0.004$\\
-& Forgetting & $2.54 \pm 0.35$  & $2.18 \pm 0.12$  & $-0.359 \pm 0.325$\\
-& Backward   & $-2.42 \pm 0.39$ & $-2.14 \pm 0.13$ & $+0.279 \pm 0.391$\\
-\hline
+\setlength{\tabcolsep}{3pt}
+\caption{Main results: final task-averaged Acc@1 (\%). Sup-21K groups use the
+paper backbone; the last group uses RanPAC's AugReg checkpoint.
+Four-seed values are mean $\pm$ sample SD; single-run values have no SD.
+Dashes mean not evaluated/reported. IMR/IMA denote ImageNet-R/A;
+CIFAR/CUB denote CIFAR-100/CUB-200. Bold compares only the two matched methods
+within each middle group, not all protocols.}
+\label{tab:main}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Method & IMR & CIFAR & CUB & IMA & 5-Datasets\\
+\midrule
+\multicolumn{6}{@{}l}{\emph{Published Sup-21K context: three-seed means from~\cite{ref_hrmpet}}}\\
+DualPrompt~\cite{ref_dualprompt} & 68.79 & 86.60 & -- & 39.76 & 76.09\\
+S-Prompt++~\cite{ref_sprompt} & 69.68 & 88.81 & -- & 39.10 & 83.38\\
+CODA-Prompt~\cite{ref_coda} & 70.03 & 86.94 & -- & 30.96 & 62.54\\
+LAE~\cite{ref_lae} & 72.25 & 85.10 & -- & 40.36 & 64.16\\
+CPrompt~\cite{ref_cprompt} & 69.24 & 83.18 & -- & 37.60 & 71.72\\
+InfLoRA~\cite{ref_inflora} & 72.24 & 85.28 & -- & 42.12 & 71.97\\
+HiDe-LoRA~\cite{ref_hide} & 71.90 & 88.43 & -- & 42.18 & 93.25\\
+HRM-PET~\cite{ref_hrmpet} & 73.86 & 89.45 & -- & 44.28 & 93.99\\
+\midrule
+\multicolumn{6}{@{}l}{\emph{Our matched Sup-21K runs: seeds 42--45}}\\
+HRM-PET & $73.94\pm0.48$ & $89.78\pm0.03$ & $86.38\pm0.25$ & -- & --\\
+Full (ours) & $\mathbf{75.18\pm0.24}$ & $\mathbf{90.47\pm0.05}$ & $\mathbf{87.88\pm0.27}$ & -- & --\\
+\midrule
+\multicolumn{6}{@{}l}{\emph{Our Sup-21K grid: seed 42 (overlaps the four-seed group)}}\\
+HRM-PET & 74.02 & 89.77 & -- & 45.85 & 91.37\\
+Full (ours) & \textbf{75.51} & \textbf{90.53} & -- & \textbf{47.42} & \textbf{93.77}\\
+\midrule
+\multicolumn{6}{@{}l}{\emph{Exploratory AugReg-21K$\rightarrow$1K: order 1993, training seed 1}}\\
+RanPAC~\cite{ref_ranpac} & 77.44 & -- & -- & -- & --\\
+HRM-PET & 77.42 & -- & -- & -- & --\\
+Full (ours) & 79.14 & -- & -- & -- & --\\
+\bottomrule
 \end{tabular}
 \end{table}
 
-Intervals are paired $95\%$ Student-$t$,
-$\bar\Delta\pm3.182\,s_\Delta/\sqrt{4}$: imprecise at four seeds, and assuming
-approximately normal seed-wise differences. Correlated metrics mean we discuss
-axes rather than count confirmations.
+For the four-seed comparisons, differences are computed within each seed
+before averaging. Figure~\ref{fig:paired} shows paired $95\%$ Student-$t$
+intervals, $\bar\Delta\pm3.182\,s_\Delta/\sqrt{4}$, using sample SD.
+With four seeds these intervals are imprecise and assume approximately normal
+seed-wise differences; correlated metrics are not independent confirmations.
 
-\subsubsection{Routing (Acc@task): improved.}
-The gain is $+1.10$ to $+2.26$ points, with positive paired intervals on all
-three datasets. This is the axis the first stage acts on directly.
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=.48\textwidth,height=4.7cm,
+  xbar,bar width=5pt,
+  xmin=0,xmax=3,xtick={0,1,2,3},
+  ymin=.5,ymax=3.5,ytick={1,2,3},
+  yticklabels={CUB,CIFAR,IMR},
+  title={(a) Prediction},xlabel={Full $-$ HRM-PET (pp)},
+  font=\footnotesize,tick label style={font=\scriptsize},
+  axis lines=left,xmajorgrids,grid style={black!10},
+  legend style={font=\scriptsize,draw=none,at={(.5,-.30)},anchor=north,legend columns=2},
+  error bars/x dir=both,error bars/x explicit]
+\addplot[draw=plotblue,fill=plotblue!65,error bars/error bar style={black,line width=.5pt}]
+ coordinates {(1.495,1) +- (.561623,0) (.690,2) +- (.100233,0) (1.236,3) +- (.661856,0)};
+\addplot[draw=plotteal,fill=plotteal!55,error bars/error bar style={black,line width=.5pt}]
+ coordinates {(1.226,1) +- (.237059,0) (1.103,2) +- (.105006,0) (2.264,3) +- (.251378,0)};
+\legend{Acc@1,DRM task}
+\end{axis}
+\begin{axis}[
+  at={(.52\textwidth,0)},anchor=south west,
+  width=.48\textwidth,height=4.7cm,
+  xbar,bar width=5pt,
+  xmin=-1,xmax=1,xtick={-1,-.5,0,.5,1},
+  ymin=.5,ymax=3.5,ytick={1,2,3},
+  yticklabels={CUB,CIFAR,IMR},
+  title={(b) Retention},xlabel={Full $-$ HRM-PET (pp)},
+  font=\footnotesize,tick label style={font=\scriptsize},
+  axis lines=left,xmajorgrids,grid style={black!10},
+  legend style={font=\scriptsize,draw=none,at={(.5,-.30)},anchor=north,legend columns=2},
+  error bars/x dir=both,error bars/x explicit]
+\addplot[draw=plotorange,fill=plotorange!60,error bars/error bar style={black,line width=.5pt}]
+ coordinates {(-.359,1) +- (.517075,0) (-.150,2) +- (.151145,0) (-.056,3) +- (.531394,0)};
+\addplot[draw=plotpurple,fill=plotpurple!55,error bars/error bar style={black,line width=.5pt}]
+ coordinates {(.279,1) +- (.622081,0) (.136,2) +- (.151145,0) (-.047,3) +- (.448662,0)};
+\draw[black!55,densely dashed] (axis cs:0,.5) -- (axis cs:0,3.5);
+\legend{Forgetting,Backward}
+\end{axis}
+\end{tikzpicture}
+\caption{Paired changes over seeds 42--45; whiskers are $95\%$ $t$ intervals,
+not the SD of individual runs. Positive is better for prediction and Backward;
+negative is better for Forgetting. Every retention interval crosses zero.
+IMR, CIFAR and CUB denote ImageNet-R, CIFAR-100 and CUB-200.}
+\label{fig:paired}
+\end{figure}
 
-\subsubsection{Classification (Acc@1, Acc@5): improved.}
-Acc@1 rises by $+0.69$ to $+1.50$ points and Acc@5 by $+0.22$ to $+1.31$,
-with positive paired intervals for both metrics on all three datasets.
-The full method's Acc@1 improvement repeats across every seed. These aggregate
-gains do not establish how many routing repairs also repair classification.
+\subsubsection{Prediction and retention.}
+DRM-proposal accuracy rises by $1.10$--$2.26$ points and Acc@1 by
+$0.69$--$1.50$, with positive paired intervals on all three datasets.
+Acc@5 also rises by $0.22$--$1.31$ points, with positive intervals.
+The Acc@1 gain repeats in every seed, but these aggregate gains do not count
+how many routing corrections repair a class prediction.
+All six paired retention intervals include zero: neither a consistent benefit
+nor equivalence is established. For example, CIFAR Forgetting changes by
+$-0.150$ $[-0.302,+0.002]$ and Backward by $+0.136$ $[-0.015,+0.287]$.
+No equivalence margin was specified.
 
-\subsubsection{Retention (Forgetting, Backward): unresolved.}
-All six paired retention intervals include zero. CIFAR Forgetting is
-$-0.150$ $[-0.302,+0.002]$ and Backward $+0.136$ $[-0.015,+0.287]$.
-These related metrics are not independent confirmations. Neither consistent
-improvement nor equivalence is established: four seeds leave substantial
-uncertainty, and no equivalence margin was specified. The
-single-seed decomposition in Sect.~\ref{sec:grid} is descriptive.
+\subsubsection{Comparability.}
+Our seed-42 HRM-PET accuracy differs from the published three-seed mean by
+$+0.16$ on ImageNet-R, $+0.32$ on CIFAR-100, $+1.57$ on ImageNet-A and
+$-2.62$ on 5-Datasets. Published-context rows are therefore not controlled
+comparisons with our runs; the paired differences isolate the added fusion.
 
-\subsection{Placement Against Prior Methods}
-\label{sec:prior}
-
-Table~\ref{tab:prior} places the method among the baselines the original work
-reports. Its first eight rows are quoted from Table~1 of~\cite{ref_hrmpet} under
-Sup-21K, averages over three seeds; the last two are our own runs at seed $42$
-through the code path of Sect.~\ref{sec:setup}.
-
-\begin{table}[htbp]
-\small
-\setlength{\tabcolsep}{5pt}
-\caption{Final average accuracy (\%) under Sup-21K. Rows above the rule are
-quoted from Table~1 of~\cite{ref_hrmpet}, averaged over three seeds; the two
-below are ours at seed $42$, from a different implementation and seed set.
-Bold indicates the best value within each group, not a controlled cross-group
-ranking. S-Prompt++ and HiDe-LoRA are the variants evaluated in~\cite{ref_hrmpet}.}
-\label{tab:prior}
-\begin{tabular}{lrrrr}
-\hline
-Method & CIFAR-100 & ImageNet-R & ImageNet-A & 5-Datasets\\
-\hline
-DualPrompt~\cite{ref_dualprompt}   & 86.60 & 68.79 & 39.76 & 76.09\\
-S-Prompt++~\cite{ref_sprompt}      & 88.81 & 69.68 & 39.10 & 83.38\\
-CODA-Prompt~\cite{ref_coda}        & 86.94 & 70.03 & 30.96 & 62.54\\
-LAE~\cite{ref_lae}                 & 85.10 & 72.25 & 40.36 & 64.16\\
-CPrompt~\cite{ref_cprompt}         & 83.18 & 69.24 & 37.60 & 71.72\\
-InfLoRA~\cite{ref_inflora}         & 85.28 & 72.24 & 42.12 & 71.97\\
-HiDe-LoRA~\cite{ref_hide}          & 88.43 & 71.90 & 42.18 & 93.25\\
-HRM-PET~\cite{ref_hrmpet}          & \textbf{89.45} & \textbf{73.86} & \textbf{44.28} & \textbf{93.99}\\
-\hline
-HRM-PET, our run                   & 89.77 & 74.02 & 45.85 & 91.37\\
-Proposed                           & \textbf{90.53} & \textbf{75.51} & \textbf{47.42} & \textbf{93.77}\\
-\hline
-\end{tabular}
-\end{table}
-
-Our seed-42 baseline differs from the published mean by $+0.32$, $+0.16$,
-$+1.57$ and $-2.62$ points on the four datasets, respectively. These reproduction
-gaps preclude a controlled comparison across the two groups. The controlled
-comparison remains the paired baseline--full difference in Table~\ref{tab:main}.
+The last group uses the same AugReg weights (ImageNet-21K followed by
+ImageNet-1K fine-tuning), hashed images and class order (NumPy seed 1993).
+RanPAC uses its official ID7 entry
+(SSF, 20 epochs on task 1); our TII/LoRA training uses 20/50 epochs per task.
+Torch seed is 1, but augmentations, runtimes and training budgets differ.
+Full gains $1.69$ points over RanPAC and $1.72$ over matched HRM-PET.
+This one-order result establishes neither multi-order reliability nor lower
+computational cost; pending replications are excluded.
 
 \subsection{Generalisation Across Pre-training Settings}
 \label{sec:grid}
@@ -698,15 +719,15 @@ seed $42$. All cells use the same $w=0.7$, $\beta=0.5$ and margin gate;
 these are single-seed comparisons, not confidence intervals.}
 \label{tab:grid}
 \begin{tabular}{lrrrr}
-\hline
+\toprule
 Pre-training & ImageNet-R & CIFAR-100 & ImageNet-A & 5-Datasets\\
-\hline
+\midrule
 Sup-21K   & +1.49 & +0.76 & +1.57 & +2.40\\
 MoCo-v3   & +1.89 & +2.12 & +2.41 & +1.41\\
 iBOT-1K   & +2.52 & +2.06 & +3.58 & +0.85\\
 iBOT-21K  & +2.55 & +1.80 & +2.63 & +0.59\\
 DINO      & +2.68 & +2.03 & +0.97 & +0.75\\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -730,18 +751,19 @@ fusion ($w=1$); both class-only variants use $\beta=0.5$.
 \setlength{\tabcolsep}{5pt}
 \caption{Component comparison: final Acc@1 (\%), mean $\pm$ sample SD over
 seeds 42--45. Full uses $w=0.7$, $\beta=0.5$ and the margin gate.
+Bold marks the highest mean in each column, not a significance claim.
 The full method is not uniformly best among the variants.}
 \label{tab:components}
 \begin{tabular}{lrrr}
-\hline
+\toprule
 Variant & ImageNet-R & CIFAR-100 & CUB-200\\
-\hline
+\midrule
 HRM-PET & $73.94\pm0.48$ & $89.78\pm0.03$ & $86.38\pm0.25$\\
 Same-feature RP-only & $69.89\pm0.17$ & $88.80\pm0.20$ & $87.26\pm0.27$\\
-Class-only, ungated & $74.49\pm0.14$ & $90.15\pm0.16$ & $88.01\pm0.21$\\
-Class-only, gated & $75.10\pm0.21$ & $90.50\pm0.08$ & $87.72\pm0.26$\\
-Full & $75.18\pm0.24$ & $90.47\pm0.05$ & $87.88\pm0.27$\\
-\hline
+Class-only, ungated & $74.49\pm0.14$ & $90.15\pm0.16$ & $\mathbf{88.01\pm0.21}$\\
+Class-only, gated & $75.10\pm0.21$ & $\mathbf{90.50\pm0.08}$ & $87.72\pm0.26$\\
+Full (ours) & $\mathbf{75.18\pm0.24}$ & $90.47\pm0.05$ & $87.88\pm0.27$\\
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -804,34 +826,47 @@ classification, but does not count actual repairs or harms of full fusion.
 
 The two weights were fixed sequentially, $w$ before the second stage existed and
 $\beta$ afterwards, so the second stage may have shifted the optimum of the
-first. Table~\ref{tab:wbeta} reports Acc@1 over the joint grid on ImageNet-R at
-seed $42$ with the margin gate active.
+first. Figure~\ref{fig:weights} plots the joint grid on ImageNet-R at seed $42$
+with the margin gate active. This is an exploratory test-set sensitivity
+analysis, not an independent validation set for choosing hyperparameters.
 
-\begin{table}[htbp]
+\begin{figure}[htbp]
 \centering
-\footnotesize
-\setlength{\tabcolsep}{9pt}
-\caption{Acc@1 over the $w \times \beta$ grid, ImageNet-R at seed $42$, full
-method with the margin gate.}
-\label{tab:wbeta}
-\begin{tabular}{lrrr}
-\hline
-& $\beta = 0.3$ & $\beta = 0.5$ & $\beta = 0.7$\\
-\hline
-$w = 0.6$ & 75.28 & \textbf{75.61} & 75.29\\
-$w = 0.7$ (reported) & 75.22 & 75.51 & 75.24\\
-$w = 0.8$ & 75.12 & 75.50 & 75.27\\
-\hline
-\end{tabular}
-\end{table}
+\begin{tikzpicture}
+\begin{axis}[
+  width=8.1cm,height=4.6cm,
+  xmin=.58,xmax=.82,xtick={.6,.7,.8},
+  ymin=75.05,ymax=75.70,ytick={75.1,75.3,75.5,75.7},
+  xlabel={Routing weight $w$ (primary-score share)},
+  ylabel={Final Acc@1 (\%)},font=\footnotesize,
+  tick label style={font=\scriptsize},
+  scaled y ticks=false,y tick label style={/pgf/number format/fixed,/pgf/number format/precision=1},
+  grid=major,grid style={black!10},axis lines=left,
+  legend style={draw=none,font=\scriptsize,at={(.5,1.02)},anchor=south,legend columns=3}]
+\addplot[plotblue,thick,mark=square*] coordinates {(.6,75.28) (.7,75.22) (.8,75.12)};
+\addplot[plotteal,thick,mark=*] coordinates {(.6,75.61) (.7,75.51) (.8,75.50)};
+\addplot[plotpurple,thick,mark=triangle*] coordinates {(.6,75.29) (.7,75.24) (.8,75.27)};
+\draw[black!45,densely dashed] (axis cs:.7,75.05) -- (axis cs:.7,75.68);
+\legend{$\beta=0.3$,$\beta=0.5$,$\beta=0.7$}
+\end{axis}
+\end{tikzpicture}
+\caption{Weight sensitivity, ImageNet-R seed 42. The displayed vertical range
+is zoomed to show small differences; points are individual runs, not means
+or confidence intervals. The dashed line marks the reported $w=0.7$.
+The best observed grid point is $(w,\beta)=(0.6,0.5)$ at $75.61\%$.}
+\label{fig:weights}
+\end{figure}
 
 The grid favours $\beta=0.5$ at every $w$; its maximum is $w=0.6$, not the
 reported $0.7$. At $\beta=0.5$, Acc@1 spans $0.11$ points, versus about one point
 for Acc@task. Across four seeds, $0.6$ gains
 $+0.332$ $[+0.143,+0.522]$ Acc@task and $+0.108$ $[-0.064,+0.280]$ Acc@1
 over $0.7$ with the gate and $\beta=0.5$; the Acc@1 sign reverses on seed 43.
-These full-method comparisons establish neither equivalence nor routing-only
-optimality. We retain the earlier $w=0.7$ for consistency, not as a known optimum.
+Thus $0.6$ is the observed grid maximum, while its classification advantage
+over $0.7$ is small and uncertain across four seeds. We retain $0.7$ as the
+common reporting configuration, not as an optimum, and disclose the full
+sensitivity result rather than selecting the main setting after inspecting
+these test outcomes. This does not remove the development-set bias.
 
 \subsection{Limitations}
 \label{sec:limits}
@@ -841,9 +876,11 @@ More seeds do not remove selection bias. CUB/pre-training overlap~\cite{ref_cub}
 was not audited. The grids and five-backbone ablation are single-seed; only
 the three-dataset contrasts use four seeds. CIFAR's conditional routing effect
 is unresolved, and gate benefits vary across backbones.
-Same-protocol RanPAC reproduction remains absent despite the matched-head
-control in Table~\ref{tab:components}. Quoted baselines use another implementation; our 5-Datasets
-result is below the published figure. Retention benefit/equivalence remains
+The additional RanPAC comparison matches pretrained weights, images and class
+order only for one run; training budgets and runtimes differ, and multi-order
+verification is incomplete. The RP-only control in Table~\ref{tab:components}
+is not a full RanPAC reproduction. Quoted baselines use another implementation;
+our Sup-21K 5-Datasets result is below the published figure. Retention benefit/equivalence remains
 unestablished; phase-level cost and actual full-fusion repair/harm counts
 were not measured.
 The loader skips two zero-byte NotMNIST training files, also empty in the
@@ -852,7 +889,7 @@ local source archive; we did not replace them.
 \section{Conclusion}
 
 Reusing one fixed-feature RP predictor for task proposals and class scores
-improves HRM-PET by $0.69$--$1.50$ Acc@1 points across three datasets and four
+improves classification by $0.69$--$1.50$ Acc@1 points over the matched PET system across three datasets and four
 seeds, without changing adapter training or storing past images. Component
 comparisons show that class fusion provides much of the gain; the added value
 of routing and gating is conditional, not universal. The method improves
@@ -903,11 +940,12 @@ sub-optimality. In: NeurIPS (2023)
 
 \bibitem{ref_l2p}
 Wang, Z., Zhang, Z., Lee, C.Y., Zhang, H., Sun, R., Ren, X., Su, G., Perot, V.,
-Dy, J., Pfister, T.: Learning to prompt for continual learning. In: CVPR (2022)
+Dy, J., Pfister, T.: Learning to prompt for continual learning. In: CVPR,
+pp.~139--149 (2022)
 
 \bibitem{ref_dualprompt}
 Wang, Z., Zhang, Z., Ebrahimi, S., Sun, R., Zhang, H., Lee, C.Y., Ren, X., Su,
-G., Perot, V., Dy, J., et al.: DualPrompt: complementary prompting for
+G., Perot, V., Dy, J., Pfister, T.: DualPrompt: complementary prompting for
 rehearsal-free continual learning. In: ECCV (2022)
 
 \bibitem{ref_lora}
@@ -921,12 +959,14 @@ W.: LoRA: low-rank adaptation of large language models. In: ICLR (2022)
 \bibitem{ref_coda}
 Smith, J.S., Karlinsky, L., Gutta, V., Cascante-Bonilla, P., Kim, D., Arbelle,
 A., Panda, R., Feris, R., Kira, Z.: CODA-Prompt: continual decomposed
-attention-based prompting for rehearsal-free continual learning. In: CVPR (2023)
+attention-based prompting for rehearsal-free continual learning. In: CVPR,
+pp.~11909--11919 (2023)
 
 \bibitem{ref_adam}
 Zhou, D.W., Cai, Z.W., Ye, H.J., Zhan, D.C., Liu, Z.: Revisiting
 class-incremental learning with pre-trained models: generalizability and
-adaptivity are all you need. Int. J. Comput. Vis. \textbf{133}, 1012--1032 (2025)
+adaptivity are all you need. Int. J. Comput. Vis. \textbf{133}, 1012--1032 (2025).
+\url{https://doi.org/10.1007/s11263-024-02218-0}
 
 \bibitem{ref_survey}
 Masana, M., Liu, X., Twardowski, B., Menta, M., Bagdanov, A.D., van de Weijer,
@@ -935,19 +975,19 @@ classification. IEEE Trans. Pattern Anal. Mach. Intell. \textbf{45}(5), 5513--55
 
 \bibitem{ref_icarl}
 Rebuffi, S.A., Kolesnikov, A., Sperl, G., Lampert, C.H.: iCaRL: incremental
-classifier and representation learning. In: CVPR (2017)
+classifier and representation learning. In: CVPR, pp.~2001--2010 (2017)
 
 \bibitem{ref_bic}
 Wu, Y., Chen, Y., Wang, L., Ye, Y., Liu, Z., Guo, Y., Fu, Y.: Large scale
-incremental learning. In: CVPR (2019)
+incremental learning. In: CVPR, pp.~374--382 (2019)
 
 \bibitem{ref_wa}
 Zhao, B., Xiao, X., Gan, G., Zhang, B., Xia, S.T.: Maintaining discrimination
-and fairness in class incremental learning. In: CVPR (2020)
+and fairness in class incremental learning. In: CVPR, pp.~13208--13217 (2020)
 
 \bibitem{ref_lucir}
 Hou, S., Pan, X., Loy, C.C., Wang, Z., Lin, D.: Learning a unified classifier
-incrementally via rebalancing. In: CVPR (2019)
+incrementally via rebalancing. In: CVPR, pp.~831--839 (2019)
 
 \bibitem{ref_mote}
 Li, L., Wu, Z., Ji, Y.: MoTE: mixture of task-specific experts for pre-trained
@@ -956,10 +996,11 @@ model-based class-incremental learning. Knowledge-Based Systems
 
 \bibitem{ref_dlepem}
 Zhao, H., Liu, R., Liu, Y.: Dynamic LoRA-experts and prototype-ensemble matching
-for class-incremental learning. Applied Sciences \textbf{16}(12), 6153 (2026)
+for class-incremental learning. Applied Sciences \textbf{16}(12), 6153 (2026).
+\url{https://doi.org/10.3390/app16126153}
 
-% The four entries below accompany the quoted rows of Table 3. Author lists are
-% transcribed from the reference list of the HRM-PET paper.
+% These entries identify the methods in the published-context group of Table 1.
+% The numbers are attributed to HRM-PET's benchmark, not these source papers.
 
 \bibitem{ref_sprompt}
 Wang, Y., Huang, Z., Hong, X.: S-Prompts learning with pre-trained transformers:
@@ -967,16 +1008,16 @@ an Occam's razor for domain incremental learning. In: NeurIPS (2022)
 
 \bibitem{ref_lae}
 Gao, Q., Zhao, C., Sun, Y., Xi, T., Zhang, G., Ghanem, B., Zhang, J.: A unified
-continual learning framework with general parameter-efficient tuning. In: ICCV
-(2023)
+continual learning framework with general parameter-efficient tuning. In: ICCV,
+pp.~11483--11493 (2023)
 
 \bibitem{ref_cprompt}
 Gao, Z., Cen, J., Chang, X.: Consistent prompting for rehearsal-free continual
-learning. In: CVPR (2024)
+learning. In: CVPR, pp.~28463--28473 (2024)
 
 \bibitem{ref_inflora}
 Liang, Y.S., Li, W.J.: InfLoRA: interference-free low-rank adaptation for
-continual learning. In: CVPR (2024)
+continual learning. In: CVPR, pp.~23638--23647 (2024)
 
 % The two analytic-learning entries below were checked against the NeurIPS
 % proceedings page and the arXiv record respectively.
@@ -1000,7 +1041,7 @@ recognition at scale. In: ICLR (2021). \url{https://arxiv.org/abs/2010.11929}
 \bibitem{ref_imr}
 Hendrycks, D., Basart, S., Mu, N., Kadavath, S., et al.: The many faces of
 robustness: a critical analysis of out-of-distribution generalization.
-In: ICCV (2021). \url{https://github.com/hendrycks/imagenet-r}
+In: ICCV, pp.~8340--8349 (2021). \url{https://github.com/hendrycks/imagenet-r}
 
 \bibitem{ref_cifar}
 Krizhevsky, A.: Learning multiple layers of features from tiny images.
