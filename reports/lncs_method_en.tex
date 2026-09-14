@@ -272,14 +272,14 @@ deviation floored at $10^{-6}$.
    \analyticmark\ Closed-form};
 \node[inner sep=0pt] at (.48,8.63) {\includegraphics[width=.72cm]{mallard.jpg}};
 \node[tinylabel] at (.48,8.13) {$\mathcal D_t$};
-\draw[arr,draw=io] (.96,8.63) -- (1.42,8.63);
-\node[tinylabel,draw=ib,fill=ib!7,minimum width=2.55cm,minimum height=.55cm]
-  at (2.77,8.63) {\snowmark\ Pretrained ViT};
-\node[tinylabel,draw=io,fill=io!9,minimum width=4.0cm,minimum height=.55cm]
-  at (6.25,8.63) {\firemark\ $p_t$, heads $g$, $g_\omega$};
-\node[tinylabel,text=black!60] at (4.14,8.63) {$+$};
-\node[tinylabel,draw=ib,fill=ib!7,minimum width=2.65cm,minimum height=.55cm]
-  at (10.45,8.63) {\snowmark\ Earlier $p_{<t}$};
+\draw[arr,draw=io] (.96,8.63) -- (1.30,8.63);
+\node[tinylabel,draw=ib,fill=ib!7,minimum width=2.35cm,minimum height=.55cm]
+  at (2.50,8.63) {\snowmark\ Pretrained ViT};
+\node[tinylabel,text=black!60] at (4.05,8.63) {$+$};
+\node[tinylabel,draw=io,fill=io!9,minimum height=.55cm,inner xsep=6pt]
+  at (5.65,8.63) {\firemark\ $p_t$, heads $g$, $g_\omega$};
+\node[tinylabel,draw=ib,fill=ib!7,minimum width=2.50cm,minimum height=.55cm]
+  at (9.55,8.63) {\snowmark\ Earlier $p_{<t}$};
 \draw[black!20,line width=.35pt] (0,7.88) -- (12.1,7.88);
 \node[heading,text=ib] at (0,7.49) {(b) \snowmark\ Inference};
 % Main inference lane.
@@ -293,27 +293,27 @@ deviation floored at $10^{-6}$.
 \node[tinylabel,draw=ib,fill=ib!12,inner sep=3pt] (adapter) at (3.95,7.00)
   {\snowmark\ LoRA $p_{t_0}$};
 \draw[arr] (adapter.south) -- (3.95,6.63);
-\draw[arr] (4.50,6.15) -- node[tinylabel,above] {$r$} (4.97,6.15);
+\draw[arr] (4.50,6.15) -- node[tinylabel,above] {$r$} (4.82,6.15);
 % Stage 1: both sources receive the same task-level reduction and scaling.
 \draw[io!70,fill=io!5,rounded corners=3pt,line width=.7pt]
-  (4.97,5.10) rectangle (6.55,6.82);
-\node[tinylabel,text=io] at (5.76,6.57) {\textbf{1 Routing}};
-\draw[io!25] (5.10,6.36) -- (6.42,6.36);
-\node[tinylabel] at (5.76,5.78) {Max / task $\rightarrow z$\\Mix $w$\\Argmax};
-\draw[arr,draw=io] (6.55,6.15) -- node[tinylabel,above] {$\hat t_{\rm DRM}$} (7.56,6.15);
+  (4.82,5.05) rectangle (6.72,6.88);
+\node[tinylabel,text=io] at (5.77,6.61) {\textbf{1 DRM routing}};
+\draw[io!25] (4.96,6.39) -- (6.58,6.39);
+\node[tinylabel] at (5.77,5.80) {Task max\\$z$-norm\\Mix $w$\\Argmax};
+\draw[arr,draw=io] (6.72,6.15) -- node[tinylabel,above] {$\hat t_{\rm DRM}$} (7.56,6.15);
 \pic at (8.03,6.11) {vit={ib/DRM / CRM + $g$}};
 \draw[arr] (8.58,6.15) -- node[tinylabel,above] {$\ell$} (9.18,6.15);
 % Stage 2: the gate is internal, avoiding an extra crossing control wire.
 \draw[ir!70,fill=ir!5,rounded corners=3pt,line width=.7pt]
-  (9.18,5.10) rectangle (11.03,6.82);
-\node[tinylabel,text=ir] at (10.105,6.57) {\textbf{2 Classes}};
-\draw[ir!25] (9.31,6.36) -- (10.90,6.36);
-\node[tinylabel] at (10.105,5.78)
+  (9.22,5.10) rectangle (10.94,6.82);
+\node[tinylabel,text=ir] at (10.08,6.57) {\textbf{2 Classes}};
+\draw[ir!25] (9.35,6.36) -- (10.81,6.36);
+\node[tinylabel] at (10.08,5.78)
   {Gate$(\ell)$ $\rightarrow z$\\Mix $\beta_i$\\Rescale};
-\draw[arr,draw=ir] (11.03,6.15) -- (11.41,6.15);
-\node[inner sep=0pt] at (11.79,6.15)
+\draw[arr,draw=ir] (10.94,6.15) -- (11.35,6.15);
+\node[inner sep=0pt] at (11.73,6.15)
   {\includegraphics[width=.66cm]{mallard.jpg}};
-\node[tinylabel,text=ir] at (11.79,5.50) {$\hat y$:\\Mallard};
+\node[tinylabel,text=ir] at (11.73,5.50) {$\hat y$:\\Mallard};
 % Second lane: RP features, expansion and class-score profile.
 \node[heading,text=it] at (.20,4.82)
   {\snowmark\ RP branch: $p_1$, one extra pass};
@@ -347,7 +347,7 @@ deviation floored at $10^{-6}$.
     at (\pos,3.44) {$c_{\lab}$};
 }
 % One score vector fans out to two inputs; paths have a dedicated empty lane.
-\draw[arr,draw=ip] (8.98,3.89) -- (10.105,3.89) -- (10.105,5.10);
+\draw[arr,draw=ip] (8.98,3.89) -- (10.08,3.89) -- (10.08,5.10);
 \draw[arr,draw=ip] (9.10,3.89) -- (9.10,4.48) -- (5.76,4.48) -- (5.76,5.10);
 \fill[ip] (9.10,3.89) circle (.04);
 \node[tinylabel,text=ip,fill=white,inner sep=2pt] at (7.14,4.48) {same $s$};
