@@ -645,36 +645,36 @@ S-Prompt++ và HiDe-LoRA là các biến thể được đánh giá trong bộ c
 Các nhóm Sup-21K
 dùng mạng xương sống của bài; nhóm cuối dùng checkpoint AugReg của RanPAC.
 Giá trị bốn seed là trung bình $\pm$ độ lệch chuẩn mẫu; lượt đơn không có SD.
-Dấu gạch nghĩa là không đánh giá/báo cáo. IMR/IMA là ImageNet-R/A; CIFAR/CUB
-là CIFAR-100/CUB-200. Chữ đậm chỉ so sánh hai phương pháp được ghép trong từng
+Dấu gạch nghĩa là không đánh giá/báo cáo. IMR/IMA là ImageNet-R/A; CIFAR là
+CIFAR-100. Chữ đậm chỉ so sánh hai phương pháp được ghép trong từng
 nhóm giữa, không so mọi protocol.}
 \label{tab:main}
-\begin{tabular}{@{}lrrrrr@{}}
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
-Phương pháp & IMR & CIFAR & CUB & IMA & 5-Datasets\\
+Phương pháp & IMR & CIFAR & IMA & 5-Datasets\\
 \midrule
-\multicolumn{6}{@{}l}{\emph{Bối cảnh Sup-21K đã công bố: trung bình ba seed từ~\cite{ref_hrmpet}}}\\
-DualPrompt~\cite{ref_dualprompt} & 68.79 & 86.60 & -- & 39.76 & 76.09\\
-S-Prompt++~\cite{ref_sprompt} & 69.68 & 88.81 & -- & 39.10 & 83.38\\
-CODA-Prompt~\cite{ref_coda} & 70.03 & 86.94 & -- & 30.96 & 62.54\\
-LAE~\cite{ref_lae} & 72.25 & 85.10 & -- & 40.36 & 64.16\\
-CPrompt~\cite{ref_cprompt} & 69.24 & 83.18 & -- & 37.60 & 71.72\\
-InfLoRA~\cite{ref_inflora} & 72.24 & 85.28 & -- & 42.12 & 71.97\\
-HiDe-LoRA~\cite{ref_hide} & 71.90 & 88.43 & -- & 42.18 & 93.25\\
-HRM-PET~\cite{ref_hrmpet} & 73.86 & 89.45 & -- & 44.28 & 93.99\\
+\multicolumn{5}{@{}l}{\emph{Bối cảnh Sup-21K đã công bố: trung bình ba seed từ~\cite{ref_hrmpet}}}\\
+DualPrompt~\cite{ref_dualprompt} & 68.79 & 86.60 & 39.76 & 76.09\\
+S-Prompt++~\cite{ref_sprompt} & 69.68 & 88.81 & 39.10 & 83.38\\
+CODA-Prompt~\cite{ref_coda} & 70.03 & 86.94 & 30.96 & 62.54\\
+LAE~\cite{ref_lae} & 72.25 & 85.10 & 40.36 & 64.16\\
+CPrompt~\cite{ref_cprompt} & 69.24 & 83.18 & 37.60 & 71.72\\
+InfLoRA~\cite{ref_inflora} & 72.24 & 85.28 & 42.12 & 71.97\\
+HiDe-LoRA~\cite{ref_hide} & 71.90 & 88.43 & 42.18 & 93.25\\
+HRM-PET~\cite{ref_hrmpet} & 73.86 & 89.45 & 44.28 & 93.99\\
 \midrule
-\multicolumn{6}{@{}l}{\emph{Các lượt Sup-21K được ghép của chúng tôi: seed 42--45}}\\
-HRM-PET & $73.94\pm0.48$ & $89.78\pm0.03$ & $86.38\pm0.25$ & -- & --\\
-Đầy đủ (chúng tôi) & $\mathbf{75.18\pm0.24}$ & $\mathbf{90.47\pm0.05}$ & $\mathbf{87.88\pm0.27}$ & -- & --\\
+\multicolumn{5}{@{}l}{\emph{Các lượt Sup-21K được ghép: seed 42--45 (chỉ IMR và CIFAR)}}\\
+HRM-PET & $73.94\pm0.48$ & $89.78\pm0.03$ & -- & --\\
+Đầy đủ (chúng tôi) & $\mathbf{75.18\pm0.24}$ & $\mathbf{90.47\pm0.05}$ & -- & --\\
 \midrule
-\multicolumn{6}{@{}l}{\emph{Lưới Sup-21K của chúng tôi: seed 42 (trùng nhóm bốn seed)}}\\
-HRM-PET & 74.02 & 89.77 & -- & 45.85 & 91.37\\
-Đầy đủ (chúng tôi) & \textbf{75.51} & \textbf{90.53} & -- & \textbf{47.42} & \textbf{93.77}\\
+\multicolumn{5}{@{}l}{\emph{Lưới Sup-21K của chúng tôi: seed 42 (trùng nhóm bốn seed)}}\\
+HRM-PET & 74.02 & 89.77 & 45.85 & 91.37\\
+Đầy đủ (chúng tôi) & \textbf{75.51} & \textbf{90.53} & \textbf{47.42} & \textbf{93.77}\\
 \midrule
-\multicolumn{6}{@{}l}{\emph{AugReg-21K$\rightarrow$1K thăm dò: thứ tự 1993, seed huấn luyện 1}}\\
-RanPAC~\cite{ref_ranpac} & 77.44 & -- & -- & -- & --\\
-HRM-PET & 77.42 & -- & -- & -- & --\\
-Đầy đủ (chúng tôi) & 79.14 & -- & -- & -- & --\\
+\multicolumn{5}{@{}l}{\emph{AugReg-21K$\rightarrow$1K thăm dò: thứ tự 1993, seed huấn luyện 1}}\\
+RanPAC~\cite{ref_ranpac} & 77.44 & -- & -- & --\\
+HRM-PET & 77.42 & -- & -- & --\\
+Đầy đủ (chúng tôi) & 79.14 & -- & -- & --\\
 \bottomrule
 \end{tabular}
 \end{table}
