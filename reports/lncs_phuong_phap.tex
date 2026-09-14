@@ -39,6 +39,20 @@
 % The photograph lives in figure_assets/ in the repository; Overleaf expects it
 % beside the source, so the path is searched in both places.
 \graphicspath{{./}{figure_assets/}}
+% Keep the source compilable when it is pasted into Overleaf without the
+% optional photograph.  The complete upload package still includes the image.
+\newcommand{\mallardimage}[1]{%
+  \IfFileExists{mallard.jpg}{%
+    \includegraphics[width=#1]{mallard.jpg}%
+  }{%
+    \IfFileExists{figure_assets/mallard.jpg}{%
+      \includegraphics[width=#1]{figure_assets/mallard.jpg}%
+    }{%
+      \fcolorbox{plotblue}{blue!5}{%
+        \resizebox{#1}{!}{\strut\textsf{Vịt trời}}}%
+    }%
+  }%
+}
 %
 \begin{document}
 %
@@ -257,7 +271,7 @@ $10^{-6}$.
 \node[heading,text=io] at (0,9.30) {(a) Học các mô-đun PET trên tác vụ $t$};
 \node[tinylabel,anchor=east,text=black!65] at (12.1,9.30)
   {F: cố định \quad T: huấn luyện \quad A: cập nhật giải tích};
-\node[inner sep=0pt] at (.48,8.63) {\includegraphics[width=.72cm]{mallard.jpg}};
+\node[inner sep=0pt] at (.48,8.63) {\mallardimage{.72cm}};
 \node[tinylabel] at (.48,8.13) {$\mathcal D_t$};
 \draw[arr,draw=io] (.96,8.63) -- (1.42,8.63);
 \node[tinylabel,draw=ib,fill=ib!7,minimum width=2.55cm,minimum height=.55cm]
@@ -275,7 +289,7 @@ $10^{-6}$.
   {Cùng ảnh $x$; dùng chung trọng số ViT và đầu thích nghi $g$};
 % Main inference lane.
 \node[inner sep=0pt] (input) at (.52,6.15)
-  {\includegraphics[width=.94cm]{mallard.jpg}};
+  {\mallardimage{.94cm}};
 \node[tinylabel] at (.52,6.86) {Đầu vào $x$};
 \draw[arr] (1.04,6.15) -- (1.48,6.15);
 \pic at (1.95,6.11) {vit={ib/ViT trần + $g_\omega$}};
@@ -304,7 +318,7 @@ $10^{-6}$.
   {Cổng từ $\ell$\\Điểm $z$\\Trộn $\beta_i$\\Đổi thang};
 \draw[arr,draw=ir] (11.03,6.15) -- (11.41,6.15);
 \node[inner sep=0pt] at (11.79,6.15)
-  {\includegraphics[width=.66cm]{mallard.jpg}};
+  {\mallardimage{.66cm}};
 \node[tinylabel,text=ir] at (11.79,5.50) {$\hat y$:\\Mallard};
 % Second lane: RP features, expansion and class-score profile.
 \node[heading,text=it] at (.20,4.82) {Nhánh RP cố định};
@@ -348,7 +362,7 @@ $10^{-6}$.
 \node[heading,text=it] at (0,2.60) {(c) Khớp RP trên tác vụ hiện tại: chỉ cập nhật thống kê và trọng số đầu ra};
 \foreach \dx/\dy in {.10/.10,.05/.05,0/0}{
   \node[inner sep=1pt,draw=it!65,fill=white] at ({.53+\dx},{1.43+\dy})
-    {\includegraphics[width=.68cm]{mallard.jpg}};
+    {\mallardimage{.68cm}};
 }
 \node[tinylabel] at (.57,.83) {$(x,y)\in\mathcal D_t$};
 \draw[arr,draw=it] (1.01,1.46) -- (1.48,1.46);
