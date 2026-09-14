@@ -419,11 +419,11 @@ $10^{-6}$.
 % Parameter reuse is labelled rather than threaded through the diagram's lanes.
 \node[tinylabel,text=ip] at (10.84,2.14) {tới (b)};
 \end{tikzpicture}
+\setlength{\abovecaptionskip}{5pt}
 \caption{Vòng đời tham số và hợp nhất hai tầng. (a) Huấn luyện các mô-đun PET
-hiện tại. (b) Cùng điểm RP cố định $s$ sửa đề xuất tác vụ DRM và hỗ trợ hợp
-nhất lớp có cổng biên. (c) Dữ liệu tác vụ hiện tại cập nhật
-$G,C,W_{\rm out}$ bằng ridge dạng đóng, không phát lại dữ liệu hay dùng
-gradient. Ảnh: T.~G.~Barnes/USFWS (phạm vi công cộng).}
+hiện tại. (b) Điểm RP cố định $s$ sửa đề xuất tác vụ DRM và hỗ trợ hợp nhất
+lớp có cổng biên. (c) Dữ liệu tác vụ hiện tại cập nhật $G,C,W_{\rm out}$ bằng
+ridge dạng đóng, không phát lại dữ liệu hay cập nhật gradient.}
 \label{fig:pipeline}
 \end{figure}
 
@@ -598,10 +598,11 @@ chính từ lưới kiểm thử đó. Hợp nhất bắt đầu từ tác vụ 
 luyện/đánh giá và tiền xử lý dữ liệu được quản lý phiên bản trong kho mã
 ~\cite{ref_code}.
 
-Acc@task trong bộ đánh giá phát hành đo đề xuất tác vụ DRM. Ở đường định tuyến
-theo lớp mặc định, CRM có thể đổi logit đầu ra mà không cập nhật định danh tác
-vụ chuyển vào metric này; vì thế đây không phải phép đo lựa chọn bộ điều hợp
-cuối sau CRM. Acc@1, Acc@5 và Loss dùng logit phân lớp cuối. Metric cuối lấy
+Độ chính xác định tuyến tác vụ trong bộ đánh giá phát hành đo đề xuất tác vụ
+DRM. Ở đường định tuyến theo lớp mặc định, CRM có thể đổi logit đầu ra mà không
+cập nhật định danh tác vụ chuyển vào metric này; vì thế đây không phải phép đo
+lựa chọn bộ điều hợp cuối sau CRM. Độ chính xác Top-1, Top-5 và Loss dùng logit
+phân lớp cuối. Metric cuối lấy
 trung bình các giá trị theo tác vụ với trọng số bằng nhau, không gộp mọi ảnh
 kiểm thử. Gọi $a_{i,t}$ là độ chính xác phân lớp trên tác vụ $i$ ở giai đoạn
 $t$, các metric ghi nhớ là
@@ -620,7 +621,8 @@ Backward càng cao càng tốt, kể cả khi Backward âm.
 \subsubsection{Khả năng tái lập và kiểm tra hợp lý.}
 Sau khi sửa mặt nạ lớp chưa thấy, $w=1,\beta=0$ khôi phục đường không hợp nhất
 đến độ chính xác ghi log ở mọi giai đoạn, trên cả ba bộ dữ liệu và seed 42--45.
-Ví dụ, hai đường cùng cho ImageNet-R seed 42 Acc@1 bằng $74.0191$. Đồng nhất
+Ví dụ, hai đường cùng cho ImageNet-R seed 42 Top-1 bằng $74.0191$.
+Đồng nhất
 này không có nghĩa các thiết lập hợp nhất trung gian luôn vô hại. Các lượt
 chính, đối chứng, lưới, ablation và chẩn đoán đã được đánh giá lại; toàn bài
 dùng loss/retention đã sửa. Cả bốn mươi lượt trong lưới cùng các tensor mạng
@@ -639,7 +641,8 @@ S-Prompt++ và HiDe-LoRA là các biến thể được đánh giá trong bộ c
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3pt}
-\caption{Kết quả chính: Acc@1 cuối trung bình theo tác vụ (\%). Các nhóm Sup-21K
+\caption{Kết quả chính: Top-1 cuối trung bình theo tác vụ (\%).
+Các nhóm Sup-21K
 dùng mạng xương sống của bài; nhóm cuối dùng checkpoint AugReg của RanPAC.
 Giá trị bốn seed là trung bình $\pm$ độ lệch chuẩn mẫu; lượt đơn không có SD.
 Dấu gạch nghĩa là không đánh giá/báo cáo. IMR/IMA là ImageNet-R/A; CIFAR/CUB
@@ -700,7 +703,7 @@ các metric tương quan không phải những xác nhận độc lập.
  coordinates {(1.495,1) +- (.561623,0) (.690,2) +- (.100233,0) (1.236,3) +- (.661856,0)};
 \addplot[draw=plotteal,fill=plotteal!55,error bars/error bar style={black,line width=.5pt}]
  coordinates {(1.226,1) +- (.237059,0) (1.103,2) +- (.105006,0) (2.264,3) +- (.251378,0)};
-\legend{Acc@1,Tác vụ DRM}
+\legend{Top-1,Định tuyến tác vụ}
 \end{axis}
 \begin{axis}[
   at={(.52\textwidth,0)},anchor=south west,
@@ -730,9 +733,9 @@ cắt qua không. IMR, CIFAR và CUB lần lượt là ImageNet-R, CIFAR-100 và
 \end{figure}
 
 \subsubsection{Dự đoán và ghi nhớ.}
-Độ chính xác đề xuất DRM tăng $1.10$--$2.26$ điểm và Acc@1 tăng
-$0.69$--$1.50$ điểm, với khoảng ghép cặp dương trên cả ba bộ dữ liệu. Acc@5
-cũng tăng $0.22$--$1.31$ điểm với khoảng dương. Mức tăng Acc@1 lặp lại ở mọi
+Định tuyến tác vụ tăng $1.10$--$2.26$ điểm và Top-1 tăng
+$0.69$--$1.50$ điểm, với khoảng ghép cặp dương trên cả ba bộ dữ liệu. Top-5
+cũng tăng $0.22$--$1.31$ điểm với khoảng dương. Mức tăng Top-1 lặp lại ở mọi
 seed, nhưng các mức tăng tổng hợp này không đếm bao nhiêu sửa đổi định tuyến
 thực sự sửa được dự đoán lớp. Cả sáu khoảng ghép cặp của metric ghi nhớ đều
 chứa không: chưa chứng minh được lợi ích nhất quán hay tính tương đương. Ví dụ,
@@ -759,8 +762,8 @@ hay chi phí thấp hơn; các lượt lặp đang chờ không được đưa v
 \label{sec:grid}
 
 Bảng~\ref{tab:grid} báo cáo lưới $4\times5$ bằng một đường mã ở seed $42$.
-Cả hai mươi ô tăng Acc@1 từ $+0.59$ đến $+3.58$ điểm, trên đường cơ sở Acc@1
-$31.8$--$93.8$; mức tăng Acc@task là $+0.97$ đến $+4.57$.
+Cả hai mươi ô tăng Top-1 từ $+0.59$ đến $+3.58$ điểm, trên đường cơ sở Top-1
+$31.8$--$93.8$; mức tăng định tuyến tác vụ là $+0.97$ đến $+4.57$.
 
 Độ chính xác cuối trên tác vụ cũ tăng ở mọi ô (trung bình $+1.83$), so với
 $+1.58$ lúc học. Backward xấu đi ở năm ô vì mức tăng lúc học lớn hơn, không
@@ -783,7 +786,7 @@ dùng $\beta=0.5$.
 \centering
 \small
 \setlength{\tabcolsep}{6pt}
-\caption{Chênh lệch Acc@1 (điểm), phương pháp đầy đủ trừ HRM-PET được ghép
+\caption{Chênh lệch Top-1 (điểm), phương pháp đầy đủ trừ HRM-PET được ghép
 ở seed $42$. Mọi ô dùng $w=0.7$, $\beta=0.5$ và cổng biên; không hàm ý
 khoảng tin cậy.}
 \label{tab:grid}
@@ -801,7 +804,7 @@ DINO      & +2.68 & +2.03 & +0.97 & +0.75\\
 
 \vspace{.35\baselineskip}
 \setlength{\tabcolsep}{5pt}
-\caption{Acc@1 cuối (\%), trung bình $\pm$ SD mẫu trên seed 42--45.
+\caption{Top-1 cuối (\%), trung bình $\pm$ SD mẫu trên seed 42--45.
 Phương pháp đầy đủ dùng $w=0.7$, $\beta=0.5$ và cổng biên. Chữ đậm là trung
 bình cột cao nhất, không hàm ý ý nghĩa thống kê; đầy đủ không luôn tốt nhất.}
 \label{tab:components}
@@ -824,17 +827,17 @@ nhất, còn chỉ lớp có cổng cao nhất trên CIFAR; chúng tôi giữ m�
 thay vì chọn người thắng khác nhau cho từng bộ dữ liệu.
 
 \subsubsection{Định tuyến cùng hợp nhất lớp không cổng.}
-Ablation năm mạng xương sống trên ImageNet-R dùng seed $42$; Acc@1 cơ sở từ
+Ablation năm mạng xương sống trên ImageNet-R dùng seed $42$; Top-1 cơ sở từ
 $68.47$ đến $74.02$. Chúng tôi báo cáo chênh lệch giữa các biến thể đã chỉ định.
-Biến thể chỉ định tuyến và chỉ lớp không cổng tăng Acc@1 trên từng mạng lần
+Biến thể chỉ định tuyến và chỉ lớp không cổng tăng Top-1 trên từng mạng lần
 lượt $+0.29$--$+0.73$ và $+0.51$--$+3.07$. Thêm định tuyến vào hợp nhất lớp
-không cổng làm Acc@1 đổi $-0.07$ đến $+0.02$, chưa chứng minh tương đương.
+không cổng làm Top-1 đổi $-0.07$ đến $+0.02$, chưa chứng minh tương đương.
 
-Acc@1 của đầy đủ trừ chỉ lớp có cổng là $+0.13$, $+0.29$, $+0.78$, $+0.43$ và
+Top-1 của đầy đủ trừ chỉ lớp có cổng là $+0.13$, $+0.29$, $+0.78$, $+0.43$ và
 $+0.77$ trên Sup-21K, MoCo-v3, iBOT-1K, iBOT-21K và DINO ở seed $42$. Các mức
 tăng một seed này chưa chứng minh độ tin cậy hay lợi ích ghi nhớ: Forgetting
 của MoCo-v3 tăng từ $3.44$ lên $3.69$. Cổng cũng không luôn có lợi: đầy đủ trừ
-đầy đủ không cổng là $-0.26$ Acc@1 trên MoCo-v3 và $-0.54$ trên iBOT-1K.
+đầy đủ không cổng là $-0.26$ điểm Top-1 trên MoCo-v3 và $-0.54$ trên iBOT-1K.
 
 \subsubsection{Đóng góp có điều kiện trên bốn seed.}
 Đầy đủ trừ chỉ lớp có cổng đo tác động định tuyến có điều kiện; có cổng trừ
@@ -849,7 +852,7 @@ và $-0.284$ $[-0.570,+0.002]$ trên CUB-200. Mỗi cặp cộng lại bằng th
 $0.005$. Định tuyến dương trên hai bộ và chưa rõ trên CIFAR. Ước lượng cổng
 trên CUB âm nhưng khoảng chứa không nên chưa chứng minh có hại. Phương pháp
 đầy đủ vẫn cải thiện so với HRM-PET trong Bảng~\ref{tab:main}. Chỉ tầng hợp
-nhất thứ nhất làm thay đổi Acc@task.
+nhất thứ nhất làm thay đổi độ chính xác định tuyến tác vụ.
 
 \subsection{Chẩn đoán tính bổ sung}
 \label{sec:diagnostics}
@@ -886,7 +889,7 @@ thực độc lập để chọn siêu tham số.
   xmin=.58,xmax=.82,xtick={.6,.7,.8},
   ymin=75.05,ymax=75.70,ytick={75.1,75.3,75.5,75.7},
   xlabel={Trọng số định tuyến $w$ (tỷ trọng điểm chính)},
-  ylabel={Acc@1 cuối (\%)},font=\footnotesize,
+  ylabel={Top-1 cuối (\%)},font=\footnotesize,
   tick label style={font=\scriptsize},
   scaled y ticks=false,y tick label style={/pgf/number format/fixed,/pgf/number format/precision=1},
   grid=major,grid style={black!10},axis lines=left,
@@ -906,10 +909,11 @@ tin cậy. Đường đứt đánh dấu $w=0.7$ được báo cáo. Điểm lư
 \end{figure}
 
 Lưới ưu tiên $\beta=0.5$ tại mọi $w$; cực đại nằm ở $w=0.6$, không phải $0.7$
-được báo cáo. Với $\beta=0.5$, Acc@1 chỉ trải $0.11$ điểm, so với khoảng một
-điểm của Acc@task. Trên bốn seed, $0.6$ tăng Acc@task
-$+0.332$ $[+0.143,+0.522]$ và Acc@1 $+0.108$ $[-0.064,+0.280]$ so với $0.7$
-khi dùng cổng và $\beta=0.5$; dấu của chênh lệch Acc@1 đảo ở seed 43. Vì vậy,
+được báo cáo. Với $\beta=0.5$, Top-1 chỉ trải $0.11$ điểm, so với khoảng một
+điểm của định tuyến tác vụ. Trên bốn seed, $0.6$ tăng định tuyến tác vụ
+$+0.332$ $[+0.143,+0.522]$ điểm và Top-1 $+0.108$ $[-0.064,+0.280]$ điểm so
+với $0.7$ khi dùng cổng và $\beta=0.5$; dấu của chênh lệch Top-1 đảo ở seed 43.
+Vì vậy,
 $0.6$ là cực đại lưới quan sát được, nhưng lợi thế phân lớp so với $0.7$ nhỏ
 và chưa chắc chắn trên bốn seed. Chúng tôi giữ $0.7$ làm cấu hình báo cáo chung,
 không gọi nó là tối ưu, và công bố toàn bộ kết quả độ nhạy thay vì chọn cấu
@@ -938,7 +942,7 @@ thay thế chúng.
 \section{Kết luận}
 
 Tái dùng một bộ dự đoán RP có đặc trưng cố định cho cả đề xuất tác vụ lẫn điểm
-lớp tăng độ chính xác phân lớp $0.69$--$1.50$ điểm Acc@1 so với hệ PET được
+lớp tăng độ chính xác phân lớp $0.69$--$1.50$ điểm Top-1 so với hệ PET được
 ghép trên ba bộ dữ liệu và bốn seed, mà không thay đổi huấn luyện bộ điều hợp
 hay lưu ảnh cũ. So sánh thành phần cho thấy hợp nhất lớp tạo phần lớn mức tăng;
 giá trị bổ sung của định tuyến và cổng mang tính điều kiện, không phổ quát.

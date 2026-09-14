@@ -402,11 +402,11 @@ deviation floored at $10^{-6}$.
 % Parameter reuse is labelled rather than threaded through the diagram's lanes.
 \node[tinylabel,text=ip] at (10.84,2.14) {to (b)};
 \end{tikzpicture}
-\caption{Parameter lifecycle and two-stage fusion. (a) Train current PET
-modules. (b) The same fixed RP scores $s$ revise the DRM task proposal and
-support margin-gated class fusion. (c) Current-task data update
-$G,C,W_{\rm out}$ by closed-form ridge, without replay or gradients.
-Photo: T.~G.~Barnes/USFWS (public domain).}
+\setlength{\abovecaptionskip}{5pt}
+\caption{Parameter lifecycle and two-stage fusion. (a) Training the current
+PET modules. (b) Fixed RP scores $s$ revise the DRM task proposal and support
+margin-gated class fusion. (c) Current-task data update $G,C,W_{\rm out}$
+using closed-form ridge, without replay or gradient updates.}
 \label{fig:pipeline}
 \end{figure}
 
@@ -580,10 +580,11 @@ Fusion starts at task 1; CRM retains \texttt{En=gen}, threshold $-10$, and the
 second-ranked class candidate. Training/evaluation scripts and dataset
 preprocessing are versioned in the code repository~\cite{ref_code}.
 
-Acc@task in the released evaluator measures the DRM task proposal. In the
+Task-routing accuracy in the released evaluator measures the DRM task proposal. In the
 default class-based routing path, CRM can change the output logits without
 updating the task identity passed to this metric; it is therefore not a measure
-of final adapter selection after CRM. Acc@1, Acc@5 and Loss use the final
+of final adapter selection after CRM. Top-1 and Top-5 classification accuracy,
+as well as Loss, use the final
 classification logits. Final metrics average the per-task values with equal
 task weights, not by pooling all test images. Writing $a_{i,t}$ for classification accuracy on task $i$
 at stage $t$, the retention measures are
@@ -602,7 +603,7 @@ higher is better for accuracy and Backward (including when Backward is negative)
 \subsubsection{Reproducibility and sanity check.}
 With corrected unseen-class masking, $w=1,\beta=0$ recovers the unfused path
 to logged precision at every stage for all three datasets and seeds 42--45.
-For example, both paths give ImageNet-R seed-42 Acc@1 $74.0191$.
+For example, both paths give ImageNet-R seed-42 Top-1 $74.0191$.
 This identity does not imply harmless intermediate fusion settings.
 Main runs, controls, grids, ablations and diagnostics were re-evaluated;
 corrected loss/retention values are used throughout. All forty grid evaluations
@@ -621,7 +622,7 @@ are the variants evaluated in that benchmark.
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3pt}
-\caption{Main results: final task-averaged Acc@1 (\%). Sup-21K groups use the
+\caption{Main results: final task-averaged Top-1 (\%). Sup-21K groups use the
 paper backbone; the last group uses RanPAC's AugReg checkpoint.
 Four-seed values are mean $\pm$ sample SD; single-run values have no SD.
 Dashes mean not evaluated/reported. IMR/IMA denote ImageNet-R/A;
@@ -682,7 +683,7 @@ seed-wise differences; correlated metrics are not independent confirmations.
  coordinates {(1.495,1) +- (.561623,0) (.690,2) +- (.100233,0) (1.236,3) +- (.661856,0)};
 \addplot[draw=plotteal,fill=plotteal!55,error bars/error bar style={black,line width=.5pt}]
  coordinates {(1.226,1) +- (.237059,0) (1.103,2) +- (.105006,0) (2.264,3) +- (.251378,0)};
-\legend{Acc@1,DRM task}
+\legend{Top-1,Task routing}
 \end{axis}
 \begin{axis}[
   at={(.52\textwidth,0)},anchor=south west,
@@ -712,10 +713,10 @@ IMR, CIFAR and CUB denote ImageNet-R, CIFAR-100 and CUB-200.}
 \end{figure}
 
 \subsubsection{Prediction and retention.}
-DRM-proposal accuracy rises by $1.10$--$2.26$ points and Acc@1 by
+Task routing rises by $1.10$--$2.26$ points and Top-1 by
 $0.69$--$1.50$, with positive paired intervals on all three datasets.
-Acc@5 also rises by $0.22$--$1.31$ points, with positive intervals.
-The Acc@1 gain repeats in every seed, but these aggregate gains do not count
+Top-5 also rises by $0.22$--$1.31$ points, with positive intervals.
+The Top-1 gain repeats in every seed, but these aggregate gains do not count
 how many routing corrections repair a class prediction.
 All six paired retention intervals include zero: neither a consistent benefit
 nor equivalence is established. For example, CIFAR Forgetting changes by
@@ -741,8 +742,9 @@ computational cost; pending replications are excluded.
 \label{sec:grid}
 
 Table~\ref{tab:grid} reports the $4\times5$ grid using one code path at seed $42$.
-All twenty cells improve Acc@1 by $+0.59$ to $+3.58$ points, against baseline
-Acc@1 of $31.8$--$93.8$; Acc@task gains are $+0.97$ to $+4.57$.
+All twenty cells improve Top-1 by $+0.59$ to $+3.58$ points, against
+baseline Top-1 of $31.8$--$93.8$; task-routing gains are
+$+0.97$ to $+4.57$.
 
 Final accuracy on earlier tasks rises in every cell ($+1.83$ on
 average), versus $+1.58$ at learning time. Backward, their difference, worsens
@@ -765,7 +767,7 @@ fusion ($w=1$); both class-only variants use $\beta=0.5$.
 \centering
 \small
 \setlength{\tabcolsep}{6pt}
-\caption{Acc@1 change (points), full minus matched HRM-PET at seed $42$.
+\caption{Top-1 change (points), full minus matched HRM-PET at seed $42$.
 All cells use $w=0.7$, $\beta=0.5$ and the margin gate; no confidence
 intervals are implied.}
 \label{tab:grid}
@@ -783,7 +785,7 @@ DINO      & +2.68 & +2.03 & +0.97 & +0.75\\
 
 \vspace{.35\baselineskip}
 \setlength{\tabcolsep}{5pt}
-\caption{Final Acc@1 (\%), mean $\pm$ sample SD over seeds 42--45.
+\caption{Final Top-1 (\%), mean $\pm$ sample SD over seeds 42--45.
 Full uses $w=0.7$, $\beta=0.5$ and the margin gate. Bold marks the highest
 column mean, not significance; full is not uniformly best.}
 \label{tab:components}
@@ -806,19 +808,19 @@ gated class-only the highest CIFAR mean; we retain one configuration rather
 than select a different winner on each dataset.
 
 \subsubsection{Routing with ungated class fusion.}
-The five-backbone ImageNet-R ablation uses seed $42$; baseline Acc@1 ranges
+The five-backbone ImageNet-R ablation uses seed $42$; baseline Top-1 ranges
 from $68.47$ to $74.02$. We report differences between specified variants.
-Routing-only and ungated class-only variants improve Acc@1 on each
+Routing-only and ungated class-only variants improve Top-1 on each
 backbone by $+0.29$--$+0.73$ and $+0.51$--$+3.07$, respectively.
-Adding routing to ungated class fusion changes Acc@1 by $-0.07$ to $+0.02$,
+Adding routing to ungated class fusion changes Top-1 by $-0.07$ to $+0.02$,
 not establishing equivalence.
 
-Full-minus-gated-class-only Acc@1 is $+0.13$, $+0.29$, $+0.78$,
+Full-minus-gated-class-only Top-1 is $+0.13$, $+0.29$, $+0.78$,
 $+0.43$ and $+0.77$ on Sup-21K, MoCo-v3, iBOT-1K, iBOT-21K and DINO at seed $42$.
 These single-seed gains establish neither reliability nor retention benefit:
 MoCo-v3 Forgetting rises from $3.44$ to $3.69$.
 The gate is not uniformly beneficial either: full minus ungated full is
-$-0.26$ Acc@1 on MoCo-v3 and $-0.54$ on iBOT-1K.
+$-0.26$ Top-1 points on MoCo-v3 and $-0.54$ on iBOT-1K.
 
 \subsubsection{Conditional contributions over four seeds.}
 Full minus gated class-only
@@ -833,7 +835,7 @@ full-against-ungated-class-only change, $+0.69$, $+0.33$ and $-0.13$, to within
 $0.005$. Routing is positive on two datasets and unresolved on CIFAR.
 The gate's CUB estimate is negative but its interval includes zero; this does
 not establish harm. Full still improves over HRM-PET in Table~\ref{tab:main}.
-Only the first fusion stage changes Acc@task.
+Only the first fusion stage changes task routing.
 
 \subsection{Complementarity Diagnostics}
 \label{sec:diagnostics}
@@ -871,7 +873,7 @@ analysis, not an independent validation set for choosing hyperparameters.
   xmin=.58,xmax=.82,xtick={.6,.7,.8},
   ymin=75.05,ymax=75.70,ytick={75.1,75.3,75.5,75.7},
   xlabel={Routing weight $w$ (primary-score share)},
-  ylabel={Final Acc@1 (\%)},font=\footnotesize,
+  ylabel={Final Top-1 (\%)},font=\footnotesize,
   tick label style={font=\scriptsize},
   scaled y ticks=false,y tick label style={/pgf/number format/fixed,/pgf/number format/precision=1},
   grid=major,grid style={black!10},axis lines=left,
@@ -891,10 +893,11 @@ The best observed grid point is $(w,\beta)=(0.6,0.5)$ at $75.61\%$.}
 \end{figure}
 
 The grid favours $\beta=0.5$ at every $w$; its maximum is $w=0.6$, not the
-reported $0.7$. At $\beta=0.5$, Acc@1 spans $0.11$ points, versus about one point
-for Acc@task. Across four seeds, $0.6$ gains
-$+0.332$ $[+0.143,+0.522]$ Acc@task and $+0.108$ $[-0.064,+0.280]$ Acc@1
-over $0.7$ with the gate and $\beta=0.5$; the Acc@1 sign reverses on seed 43.
+reported $0.7$. At $\beta=0.5$, Top-1 spans $0.11$ points, versus
+about one point for task routing. Across four seeds, $0.6$ gains
+$+0.332$ $[+0.143,+0.522]$ task-routing points and
+$+0.108$ $[-0.064,+0.280]$ Top-1 points over $0.7$ with the gate and
+$\beta=0.5$; the Top-1 sign reverses on seed 43.
 Thus $0.6$ is the observed grid maximum, while its classification advantage
 over $0.7$ is small and uncertain across four seeds. We retain $0.7$ as the
 common reporting configuration, not as an optimum, and disclose the full
@@ -922,7 +925,7 @@ local source archive; we did not replace them.
 \section{Conclusion}
 
 Reusing one fixed-feature RP predictor for task proposals and class scores
-improves classification by $0.69$--$1.50$ Acc@1 points over the matched PET system across three datasets and four
+improves classification by $0.69$--$1.50$ Top-1 points over the matched PET system across three datasets and four
 seeds, without changing adapter training or storing past images. Component
 comparisons show that class fusion provides much of the gain; the added value
 of routing and gating is conditional, not universal. The method improves
