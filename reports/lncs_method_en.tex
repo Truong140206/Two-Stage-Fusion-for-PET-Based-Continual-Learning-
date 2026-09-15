@@ -305,21 +305,24 @@ deviation floored at $10^{-6}$.
   {\includegraphics[width=.94cm]{mallard.jpg}};
 \node[tinylabel] at (.52,6.86) {Input $x$};
 \draw[arr] (1.04,6.15) -- (1.48,6.15);
-\pic at (1.95,6.11) {vit={ib/Bare ViT + $g_\omega$}};
+\pic at (1.95,6.11) {vit={ib/{\fontsize{6.6}{7.2}\selectfont Bare ViT\hspace{2pt}+\hspace{2pt}$g_\omega$}}};
 \draw[arr] (2.50,6.15) -- node[tinylabel,above] {$u\mapsto t_0$} (3.48,6.15);
-\pic at (3.95,6.11) {vit={ib/$p_{t_0}$ + head $g$}};
-\node[tinylabel,draw=ib,fill=ib!12,inner sep=3pt] (adapter) at (3.95,7.00)
+\pic at (3.95,6.11) {vit={ib/{\fontsize{6.6}{7.2}\selectfont $p_{t_0}$\hspace{2pt}+\hspace{2pt}head $g$}}};
+\node[tinylabel,draw=ib,fill=ib!12,inner xsep=2pt,inner ysep=2pt]
+  (adapter) at (3.95,7.00)
   {\snowmark\ LoRA $p_{t_0}$};
 \draw[arr] (adapter.south) -- (3.95,6.63);
-\draw[arr] (4.50,6.15) -- node[tinylabel,above] {$r$} (4.82,6.15);
+\draw[arr] (4.50,6.15) -- node[tinylabel,above] {$r$} (4.92,6.15);
 % Stage 1: both sources receive the same task-level reduction and scaling.
 \draw[io!70,fill=io!5,rounded corners=3pt,line width=.7pt]
-  (4.82,5.05) rectangle (6.72,6.88);
-\node[tinylabel,text=io] at (5.77,6.61) {\textbf{1 Routing}};
-\draw[io!25] (4.96,6.39) -- (6.58,6.39);
-\node[tinylabel] at (5.77,5.79) {Task max\\Mix $w$\\Argmax};
-\draw[arr,draw=io] (6.72,6.15) -- node[tinylabel,above] {$\hat t_{\rm DRM}$} (7.56,6.15);
-\pic at (8.03,6.11) {vit={ib/DRM / CRM + $g$}};
+  (4.92,5.08) rectangle (6.62,6.84);
+\node[font=\fontsize{6.8}{7.4}\selectfont,text=io] at (5.77,6.58)
+  {\textbf{1 Routing}};
+\draw[io!25] (5.04,6.36) -- (6.50,6.36);
+\node[font=\fontsize{6.8}{7.4}\selectfont,align=center] at (5.77,5.77)
+  {Task max\\Mix $w$\\Argmax};
+\draw[arr,draw=io] (6.62,6.15) -- node[tinylabel,above] {$\hat t_{\rm DRM}$} (7.56,6.15);
+\pic at (8.03,6.11) {vit={ib/{\fontsize{6.6}{7.2}\selectfont DRM\hspace{1.5pt}/\hspace{1.5pt}CRM\hspace{2pt}+\hspace{2pt}$g$}}};
 \draw[arr] (8.58,6.15) -- node[tinylabel,above] {$\ell$} (9.18,6.15);
 % Stage 2: the gate is internal, avoiding an extra crossing control wire.
 \draw[ir!70,fill=ir!5,rounded corners=3pt,line width=.7pt]
@@ -366,7 +369,7 @@ deviation floored at $10^{-6}$.
 }
 % One score vector fans out to two inputs; paths have a dedicated empty lane.
 \draw[arr,draw=ip] (8.98,3.89) -- (10.08,3.89) -- (10.08,5.10);
-\draw[arr,draw=ip] (9.10,3.89) -- (9.10,4.48) -- (5.76,4.48) -- (5.76,5.10);
+\draw[arr,draw=ip] (9.10,3.89) -- (9.10,4.48) -- (5.77,4.48) -- (5.77,5.08);
 \fill[ip] (9.10,3.89) circle (.04);
 \node[tinylabel,text=ip,fill=white,inner sep=2pt] at (7.14,4.48) {same $s$};
 % Third lane: current-task fitting, not inference-time learning from test images.
