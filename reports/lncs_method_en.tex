@@ -575,11 +575,11 @@ phase-level costs nor its overhead over the baseline were measured.
 
 The backbone is ViT-B/16~\cite{ref_vit}, pre-trained on ImageNet-21K.
 Rank-$8$ LoRA modifies the key/value projections in the first five blocks.
-The four-seed study splits ImageNet-R~\cite{ref_imr}, CIFAR-100~\cite{ref_cifar}
-and CUB-200-2011~\cite{ref_cub} into $10$ tasks of $20$, $10$ and $20$ classes,
-respectively. The grid replaces CUB with ImageNet-A~\cite{ref_ima} ($10\times20$
-classes) and the five-dataset protocol of~\cite{ref_hrmpet} (one domain per task).
-Its pre-training settings are Sup-21K, MoCo-v3~\cite{ref_moco},
+The four-seed study covers ImageNet-R~\cite{ref_imr}, CIFAR-100~\cite{ref_cifar},
+CUB-200-2011~\cite{ref_cub}, ImageNet-A~\cite{ref_ima} and the five-dataset
+protocol of~\cite{ref_hrmpet}. Their task protocols are respectively
+$10\times20$, $10\times10$, $10\times20$, $10\times20$ classes and one domain
+per task. The broader grid omits CUB and tests Sup-21K, MoCo-v3~\cite{ref_moco},
 iBOT-1K/iBOT-21K~\cite{ref_ibot} and DINO~\cite{ref_dino}.
 
 Each seed (42--45) has separately trained LoRA/TII parameters; pre-trained
@@ -660,9 +660,10 @@ InfLoRA~\cite{ref_inflora} & 72.24 & 85.28 & 42.12 & 71.97\\
 HiDe-LoRA~\cite{ref_hide} & 71.90 & 88.43 & 42.18 & 93.25\\
 HRM-PET~\cite{ref_hrmpet} & 73.86 & 89.45 & 44.28 & 93.99\\
 \midrule
-\multicolumn{5}{@{}l}{\emph{Our matched Sup-21K runs: seeds 42--45 (IMR and CIFAR only)}}\\
-HRM-PET & $73.94\pm0.48$ & $89.78\pm0.03$ & -- & --\\
-Full (ours) & $\mathbf{75.18\pm0.24}$ & $\mathbf{90.47\pm0.05}$ & -- & --\\
+\multicolumn{5}{@{}l}{\emph{Our matched Sup-21K runs: seeds 42--45}}\\
+HRM-PET & $73.94\pm0.48$ & $89.78\pm0.03$ & $47.02\pm0.95$ & $91.73\pm0.25$\\
+Full (ours) & $\mathbf{75.18\pm0.24}$ & $\mathbf{90.47\pm0.05}$ &
+$\mathbf{47.83\pm0.89}$ & $\mathbf{93.73\pm0.18}$\\
 \midrule
 \multicolumn{5}{@{}l}{\emph{Our Sup-21K grid: seed 42 (overlaps the four-seed group)}}\\
 HRM-PET & 74.02 & 89.77 & 45.85 & 91.37\\
@@ -733,12 +734,17 @@ IMR, CIFAR and CUB denote ImageNet-R, CIFAR-100 and CUB-200.}
 Task routing rises by $1.10$--$2.26$ points and Top-1 by
 $0.69$--$1.50$, with positive paired intervals on all three datasets.
 Top-5 also rises by $0.22$--$1.31$ points, with positive intervals.
-The Top-1 gain repeats in every seed, but these aggregate gains do not count
-how many routing corrections repair a class prediction.
-All six paired retention intervals include zero: neither a consistent benefit
-nor equivalence is established. For example, CIFAR Forgetting changes by
-$-0.150$ $[-0.302,+0.002]$ and Backward by $+0.136$ $[-0.015,+0.287]$.
-No equivalence margin was specified.
+On these three datasets, the Top-1 gain repeats in every seed, but these
+aggregate gains do not count how many routing corrections repair a class
+prediction. All six paired retention intervals include zero: neither a
+consistent benefit nor equivalence is established. For example, CIFAR
+Forgetting changes by $-0.150$ $[-0.302,+0.002]$ and Backward by $+0.136$
+$[-0.015,+0.287]$. No equivalence margin was specified.
+
+Additional matched Top-1 changes are $+0.82$ $[-0.55,+2.18]$ on ImageNet-A
+(one negative seed) and $+2.00$ $[+1.51,+2.49]$ on 5-Datasets (all four
+positive); only the ImageNet-A interval crosses zero. Fig.~\ref{fig:paired}
+does not include their routing or retention metrics.
 
 \subsubsection{Comparability.}
 Our seed-42 HRM-PET accuracy differs from the published three-seed mean by
@@ -926,9 +932,10 @@ these test outcomes. This does not remove the development-set bias.
 
 ImageNet-R and CUB informed development; neither is an untouched holdout.
 More seeds do not remove selection bias. CUB/pre-training overlap~\cite{ref_cub}
-was not audited. The grids and five-backbone ablation are single-seed; only
-the three-dataset contrasts use four seeds. CIFAR's conditional routing effect
-is unresolved, and gate benefits vary across backbones.
+was not audited. The grids and five-backbone ablation are single-seed. Matched
+Top-1 uses four seeds on five datasets; Fig.~\ref{fig:paired} routing and
+retention intervals cover three. CIFAR's conditional routing effect is
+unresolved, and gate benefits vary across backbones.
 The additional RanPAC comparison matches pretrained weights, images and class
 order only for one run; training budgets and runtimes differ, and multi-order
 verification is incomplete. The RP-only control in Table~\ref{tab:components}
@@ -941,9 +948,10 @@ local source archive; we did not replace them.
 
 \section{Conclusion}
 
-Reusing one fixed-feature RP predictor for task proposals and class scores
-improves classification by $0.69$--$1.50$ Top-1 points over the matched PET system across three datasets and four
-seeds, without changing adapter training or storing past images. Component
+Across five datasets and four seeds, reusing one fixed-feature RP predictor for
+task proposals and class scores raises mean Top-1 by $0.69$--$2.00$ points;
+the ImageNet-A interval crosses zero. No adapter retraining or past-image
+storage is added. Component
 comparisons show that class fusion provides much of the gain; the added value
 of routing and gating is conditional, not universal. The method improves
 prediction but does not establish reduced forgetting. Controlled cost

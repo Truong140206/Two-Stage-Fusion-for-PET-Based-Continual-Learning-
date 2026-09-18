@@ -592,13 +592,12 @@ và chi phí tăng thêm so với đường cơ sở chưa được đo.
 \label{sec:setup}
 
 Mạng xương sống là ViT-B/16~\cite{ref_vit}, tiền huấn luyện trên ImageNet-21K.
-LoRA hạng $8$ sửa các phép chiếu key/value trong năm block đầu. Khảo sát bốn
-seed chia ImageNet-R~\cite{ref_imr}, CIFAR-100~\cite{ref_cifar} và
-CUB-200-2011~\cite{ref_cub} thành $10$ tác vụ, mỗi tác vụ lần lượt có $20$,
-$10$ và $20$ lớp. Trong lưới, CUB được thay bằng ImageNet-A~\cite{ref_ima}
-($10\times20$ lớp) và protocol năm bộ dữ liệu của~\cite{ref_hrmpet} (mỗi miền
-là một tác vụ). Các thiết lập tiền huấn luyện gồm Sup-21K, MoCo-v3
-~\cite{ref_moco}, iBOT-1K/iBOT-21K~\cite{ref_ibot} và DINO~\cite{ref_dino}.
+LoRA hạng $8$ sửa các phép chiếu key/value trong năm block đầu. Khảo sát bốn seed bao gồm ImageNet-R~\cite{ref_imr}, CIFAR-100~\cite{ref_cifar},
+CUB-200-2011~\cite{ref_cub}, ImageNet-A~\cite{ref_ima} và protocol năm bộ dữ
+liệu của~\cite{ref_hrmpet}. Các protocol tương ứng dùng $10\times20$,
+$10\times10$, $10\times20$, $10\times20$ lớp và mỗi miền làm một tác vụ. Lưới
+rộng hơn bỏ CUB và thử Sup-21K, MoCo-v3~\cite{ref_moco},
+iBOT-1K/iBOT-21K~\cite{ref_ibot} cùng DINO~\cite{ref_dino}.
 
 Mỗi seed (42--45) có tham số LoRA/TII được huấn luyện riêng; trọng số mạng xương
 sống tiền huấn luyện vẫn đóng băng. Hai phương pháp dùng cùng checkpoint đã lưu
@@ -680,9 +679,10 @@ InfLoRA~\cite{ref_inflora} & 72.24 & 85.28 & 42.12 & 71.97\\
 HiDe-LoRA~\cite{ref_hide} & 71.90 & 88.43 & 42.18 & 93.25\\
 HRM-PET~\cite{ref_hrmpet} & 73.86 & 89.45 & 44.28 & 93.99\\
 \midrule
-\multicolumn{5}{@{}l}{\emph{Các lượt Sup-21K được ghép: seed 42--45 (chỉ IMR và CIFAR)}}\\
-HRM-PET & $73.94\pm0.48$ & $89.78\pm0.03$ & -- & --\\
-Đầy đủ (chúng tôi) & $\mathbf{75.18\pm0.24}$ & $\mathbf{90.47\pm0.05}$ & -- & --\\
+\multicolumn{5}{@{}l}{\emph{Các lượt Sup-21K được ghép: seed 42--45}}\\
+HRM-PET & $73.94\pm0.48$ & $89.78\pm0.03$ & $47.02\pm0.95$ & $91.73\pm0.25$\\
+Đầy đủ (chúng tôi) & $\mathbf{75.18\pm0.24}$ & $\mathbf{90.47\pm0.05}$ &
+$\mathbf{47.83\pm0.89}$ & $\mathbf{93.73\pm0.18}$\\
 \midrule
 \multicolumn{5}{@{}l}{\emph{Lưới Sup-21K của chúng tôi: seed 42 (trùng nhóm bốn seed)}}\\
 HRM-PET & 74.02 & 89.77 & 45.85 & 91.37\\
@@ -752,12 +752,17 @@ cắt qua không. IMR, CIFAR và CUB lần lượt là ImageNet-R, CIFAR-100 và
 \subsubsection{Dự đoán và ghi nhớ.}
 Định tuyến tác vụ tăng $1.10$--$2.26$ điểm và Top-1 tăng
 $0.69$--$1.50$ điểm, với khoảng ghép cặp dương trên cả ba bộ dữ liệu. Top-5
-cũng tăng $0.22$--$1.31$ điểm với khoảng dương. Mức tăng Top-1 lặp lại ở mọi
-seed, nhưng các mức tăng tổng hợp này không đếm bao nhiêu sửa đổi định tuyến
-thực sự sửa được dự đoán lớp. Cả sáu khoảng ghép cặp của metric ghi nhớ đều
-chứa không: chưa chứng minh được lợi ích nhất quán hay tính tương đương. Ví dụ,
-Forgetting trên CIFAR đổi $-0.150$ $[-0.302,+0.002]$ và Backward đổi $+0.136$
-$[-0.015,+0.287]$. Không có biên tương đương được định trước.
+cũng tăng $0.22$--$1.31$ điểm với khoảng dương. Trên ba bộ dữ liệu này, mức
+tăng Top-1 lặp lại ở mọi seed, nhưng các mức tăng tổng hợp không đếm bao nhiêu
+sửa đổi định tuyến thực sự sửa được dự đoán lớp. Cả sáu khoảng ghép cặp của
+metric ghi nhớ đều chứa không: chưa chứng minh được lợi ích nhất quán hay tính
+tương đương. Ví dụ, Forgetting trên CIFAR đổi $-0.150$ $[-0.302,+0.002]$ và
+Backward đổi $+0.136$ $[-0.015,+0.287]$. Không có biên tương đương được định trước.
+
+Với IMA, chênh lệch Top-1 là $+0.82$ và khoảng $95\%$ là
+$[-0.55,+2.18]$ (một seed âm). Với 5-Datasets, các giá trị tương ứng là
+$+2.00$ và $[+1.51,+2.49]$ (cả bốn seed dương). Chỉ khoảng IMA cắt qua không;
+Hình~\ref{fig:paired} không gồm metric định tuyến hay ghi nhớ của hai bộ này.
 
 \subsubsection{Khả năng so sánh.}
 Độ chính xác HRM-PET seed 42 của chúng tôi lệch trung bình ba seed đã công bố
@@ -943,9 +948,10 @@ quá trình phát triển.
 ImageNet-R và CUB đã tham gia quá trình phát triển; không bộ nào là holdout
 chưa đụng tới. Thêm seed không loại bỏ thiên lệch lựa chọn. Mức trùng giữa CUB
 và dữ liệu tiền huấn luyện~\cite{ref_cub} chưa được kiểm tra. Lưới và ablation
-năm mạng xương sống chỉ dùng một seed; chỉ các chênh lệch ba bộ dữ liệu dùng
-bốn seed. Tác động định tuyến có điều kiện trên CIFAR chưa rõ, và lợi ích của
-cổng thay đổi theo mạng xương sống.
+năm mạng xương sống chỉ dùng một seed. Top-1 được ghép dùng bốn seed trên năm
+bộ dữ liệu; các khoảng định tuyến và ghi nhớ trong Hình~\ref{fig:paired} bao phủ
+ba bộ. Tác động định tuyến có điều kiện trên CIFAR chưa rõ, và lợi ích của cổng
+thay đổi theo mạng xương sống.
 Phép so sánh RanPAC bổ sung chỉ ghép trọng số tiền huấn luyện, ảnh và thứ tự lớp
 cho một lượt; ngân sách huấn luyện và thời gian chạy khác nhau, còn xác minh đa
 thứ tự chưa hoàn tất. Đối chứng RP-only trong Bảng~\ref{tab:components} không
@@ -958,10 +964,10 @@ thay thế chúng.
 
 \section{Kết luận}
 
-Tái dùng một bộ dự đoán RP có đặc trưng cố định cho cả đề xuất tác vụ lẫn điểm
-lớp tăng độ chính xác phân lớp $0.69$--$1.50$ điểm Top-1 so với hệ PET được
-ghép trên ba bộ dữ liệu và bốn seed, mà không thay đổi huấn luyện bộ điều hợp
-hay lưu ảnh cũ. So sánh thành phần cho thấy hợp nhất lớp tạo phần lớn mức tăng;
+Trên năm bộ dữ liệu và bốn seed, tái dùng một bộ dự đoán RP có đặc trưng cố
+định cho đề xuất tác vụ và điểm lớp làm Top-1 trung bình tăng $0.69$--$2.00$
+điểm; khoảng ImageNet-A cắt qua không. Không huấn luyện lại bộ điều hợp hay lưu
+ảnh cũ. So sánh thành phần cho thấy hợp nhất lớp tạo phần lớn mức tăng;
 giá trị bổ sung của định tuyến và cổng mang tính điều kiện, không phổ quát.
 Phương pháp cải thiện dự đoán nhưng chưa chứng minh giảm quên. Đo chi phí có
 kiểm soát và xác thực độc lập là ưu tiên cho các đánh giá tiếp theo.
