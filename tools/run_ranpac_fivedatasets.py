@@ -446,6 +446,7 @@ def main():
             with (folder / "metadata.json").open("x") as stream:
                 json.dump(metadata, stream, indent=2)
             log = folder / "console.log"
+            print("RANPAC_FIVE_RUN_DIR=" + str(folder), flush=True)
             start = time.monotonic()
             native.run_bounded(base + ["--child", "extension"], folder, env, lock,
                                log, args.max_minutes)
