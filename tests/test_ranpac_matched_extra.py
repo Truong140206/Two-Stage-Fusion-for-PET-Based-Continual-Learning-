@@ -81,11 +81,19 @@ class MatchedExtraTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runner.source_metadata(root, "cifar100")
 
-    def test_backbone_is_common_augreg_21k_to_1k(self):
-        self.assertEqual(runner.NPZ_SHA, runner.imr_trial.NPZ_SHA)
-        self.assertIn("imagenet2012-steps_20k", runner.NPZ_FILE)
-        self.assertNotEqual(runner.NPZ_FILE,
-                            runner.extra.SPECS["cifar100"]["checkpoint_file"])
+    def test_backbone_matches_each_native_ranpac_dataset(self):
+        digest = "a" * 64
+        for name in ("cifar100", "ima"):
+            filename, actual_digest = runner.native_backbone(
+                name, {"pretrained_sha256": digest})
+            self.assertEqual(filename, runner.extra.SPECS[name]["checkpoint_file"])
+            self.assertEqual(actual_digest, digest)
+        self.assertNotEqual(runner.extra.SPECS["cifar100"]["checkpoint_file"],
+                            runner.extra.SPECS["ima"]["checkpoint_file"])
+
+    def test_backbone_rejects_missing_digest(self):
+        with self.assertRaises(ValueError):
+            runner.native_backbone("cifar100", {})
 
 
 if __name__ == "__main__":

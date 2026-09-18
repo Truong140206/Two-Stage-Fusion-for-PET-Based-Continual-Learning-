@@ -33,8 +33,6 @@ from tools import verify_paper_results as verify
 PHASES = ("tii", "lora", "baseline", "full")
 TAG = "ranpac_matched_extra_v1"
 MODEL = "vit_base_patch16_224"
-NPZ_SHA = imr_trial.NPZ_SHA
-NPZ_FILE = extra.SPECS["ima"]["checkpoint_file"]
 SPECS = {
     "cifar100": {
         "classes": 100, "tasks": 10, "dataset": "Split-CIFAR100",
@@ -47,6 +45,17 @@ SPECS = {
         "tii_batch": "128", "lora_batch": "24",
     },
 }
+
+
+def native_backbone(name, metadata):
+    """Return the exact checkpoint used by the verified native RanPAC run."""
+    if name not in SPECS:
+        raise ValueError("Unknown dataset: " + name)
+    filename = extra.SPECS[name]["checkpoint_file"]
+    digest = metadata.get("pretrained_sha256")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError("Missing native RanPAC checkpoint digest for " + name)
+    return filename, digest
 
 
 def source_metadata(output_root, name):
@@ -167,7 +176,7 @@ def checkpoint_audit(folder, name, role, meta, torch):
         path = folder / role / "checkpoint" / ("task%d_checkpoint.pth" % stage)
         state = torch.load(path, map_location="cpu", weights_only=False)
         saved = state["args"] if isinstance(state["args"], dict) else vars(state["args"])
-        if (saved.get("experiment_pretrained_sha256") != NPZ_SHA
+        if (saved.get("experiment_pretrained_sha256") != meta["pretrained_sha256"]
                 or saved.get("experiment_class_order") != meta["class_order"]
                 or saved.get("seed") != 1 or saved.get("num_tasks") != spec["tasks"]
                 or saved.get("dataset") != spec["dataset"] or saved.get("model") != MODEL):
@@ -195,8 +204,9 @@ def worker(args):
     data_parent, counts, dataset_sha = data_record(args.data_root, name)
     if counts != meta_source["counts"] or dataset_sha != meta_source["dataset_sha256"]:
         raise ValueError("Live dataset differs from verified RanPAC metadata")
-    npz = args.output_root / "_ranpac_support/original/torch-cache/hub/checkpoints" / NPZ_FILE
-    if not npz.is_file() or common.sha(npz) != NPZ_SHA:
+    npz_file, npz_sha = native_backbone(name, meta_source)
+    npz = args.output_root / "_ranpac_support/original/torch-cache/hub/checkpoints" / npz_file
+    if not npz.is_file() or common.sha(npz) != npz_sha:
         raise ValueError("Pinned AugReg-21K->1K checkpoint missing/changed: " + str(npz))
     torch.set_num_threads(args.cpu_threads)
     torch.set_num_interop_threads(1)
@@ -217,7 +227,7 @@ def worker(args):
                 "tasks": spec["tasks"], "training_seed": 1, "class_order_seed": 1993,
                 "class_order": meta_source["class_order"], "counts": counts,
                 "dataset_sha256": dataset_sha, "data_parent": str(data_parent),
-                "pretrained_sha256": NPZ_SHA, "pretrained_path": str(npz),
+                "pretrained_sha256": npz_sha, "pretrained_path": str(npz),
                 "backbone_sha256": hashes[0], "source_metadata": str(source_path),
                 "source_metadata_sha256": common.sha(source_path),
                 "source_sha256": verify.source_digest(), "driver_sha256": common.sha(__file__),
@@ -249,7 +259,7 @@ def worker(args):
     training = entry.get_args()
     training.shuffle = True
     training.experiment_class_order = meta["class_order"]
-    training.experiment_pretrained_sha256 = NPZ_SHA
+    training.experiment_pretrained_sha256 = meta["pretrained_sha256"]
     training.experiment_tag = args.tag + "/" + name
     module = __import__("trainers.tii_trainer" if phase == "tii" else "trainers.lora_trainer",
                         fromlist=["train"])
