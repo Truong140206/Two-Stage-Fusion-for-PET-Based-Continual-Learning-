@@ -43,12 +43,17 @@ SPECS = {
     "cifar100": {
         "official": "cifar224", "csv": "cifar224_publish.csv",
         "classes": 100, "increment": 10, "tasks": 10, "kind": "cifar",
+        "checkpoint_file":
+            "B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz",
         "expected": _row("cifar224", "adapter",
                          "pretrained_vit_b16_224_in21k_adapter", 10, 48),
     },
     "ima": {
         "official": "imageneta", "csv": "imageneta_publish.csv",
         "classes": 200, "increment": 20, "tasks": 10, "kind": "imagefolder",
+        "checkpoint_file":
+            "B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--"
+            "imagenet2012-steps_20k-lr_0.01-res_224.npz",
         "expected": _row("imageneta", "ssf",
                          "pretrained_vit_b16_224_ssf", 20, 48),
     },
@@ -162,6 +167,23 @@ def dataset_record(name):
     return counts, digest.hexdigest()
 
 
+def pretrained_source(name, model, timm_module):
+    """Recover the actual source used by each unmodified upstream PETL path."""
+    if name == "cifar100":
+        cfg = timm_module.models.vision_transformer.default_cfgs.get(
+            "vit_base_patch16_224_in21k")
+    else:
+        cfg = getattr(model, "pretrained_cfg", None) or getattr(model, "default_cfg", None)
+    if not isinstance(cfg, dict):
+        raise ValueError("Original model exposes no pretrained configuration")
+    url = cfg.get("url", "")
+    expected = SPECS[name]["checkpoint_file"]
+    if (not url.startswith("https://storage.googleapis.com/vit_models/augreg/")
+            or not url.endswith(expected)):
+        raise ValueError("Unexpected original pretrained source: " + str(cfg))
+    return url
+
+
 def child(args):
     name = args.datasets[0]
     spec = SPECS[name]
@@ -197,11 +219,8 @@ def child(args):
     print("ORIGINAL_PRETRAINED_DOWNLOAD_OR_CACHE_CHECK", flush=True)
     config = config_row(upstream, name)
     model = inc_net.get_convnet(dict(config))
-    cfg = getattr(model, "pretrained_cfg", model.default_cfg)
-    url = cfg.get("url", "")
-    if not url or not url.endswith(".npz"):
-        raise ValueError("Unexpected original pretrained source: " + str(cfg))
-    cached = support / "torch-cache/hub/checkpoints" / url.split("/")[-1]
+    url = pretrained_source(name, model, timm)
+    cached = support / "torch-cache/hub/checkpoints" / SPECS[name]["checkpoint_file"]
     if not cached.is_file():
         raise ValueError("Original pretrained file not found in isolated cache")
     order = np.random.RandomState(1993).permutation(spec["classes"]).tolist()

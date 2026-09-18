@@ -3,6 +3,7 @@ import csv
 import json
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
@@ -43,6 +44,25 @@ class OriginalExtraTests(unittest.TestCase):
             self.write_config(root, "ima", seed="42")
             with self.assertRaisesRegex(ValueError, "differs"):
                 extra.config_row(root, "ima")
+
+    def test_pretrained_source_handles_adapter_without_default_cfg(self):
+        url = ("https://storage.googleapis.com/vit_models/augreg/" +
+               extra.SPECS["cifar100"]["checkpoint_file"])
+        timm = SimpleNamespace(models=SimpleNamespace(
+            vision_transformer=SimpleNamespace(default_cfgs={
+                "vit_base_patch16_224_in21k": {"url": url}})))
+        self.assertEqual(extra.pretrained_source("cifar100", object(), timm), url)
+
+    def test_pretrained_source_uses_ssf_model_metadata(self):
+        url = ("https://storage.googleapis.com/vit_models/augreg/" +
+               extra.SPECS["ima"]["checkpoint_file"])
+        model = SimpleNamespace(pretrained_cfg={"url": url})
+        self.assertEqual(extra.pretrained_source("ima", model, Mock()), url)
+
+    def test_wrong_pretrained_source_rejected(self):
+        model = SimpleNamespace(pretrained_cfg={"url": "https://example.invalid/model.npz"})
+        with self.assertRaisesRegex(ValueError, "Unexpected"):
+            extra.pretrained_source("ima", model, Mock())
 
     def test_generic_metrics_use_dataset_increment(self):
         cifar = extra.exact_metrics(list(range(20)), list(range(20)), 2, 10)
