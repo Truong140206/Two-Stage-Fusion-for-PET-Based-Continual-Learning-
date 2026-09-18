@@ -107,15 +107,6 @@ def _rgb(image):
     return image.convert("RGB")
 
 
-def _valid_image(path):
-    from PIL import Image
-    try:
-        with Image.open(path) as image:
-            image.verify()
-        return True
-    except Exception:
-        return False
-
 
 def build_transform(task, train):
     from torchvision import transforms
@@ -144,21 +135,20 @@ def build_transform(task, train):
 
 def base_dataset(root, task, source, train_transform):
     from torchvision import datasets
+    from continual_datasets.continual_datasets import (
+        FashionMNIST, MNIST_RGB, NotMNIST, SVHN)
     train = source == "train"
     transform = build_transform(task, train_transform)
     if task == "SVHN":
-        return datasets.SVHN(root, split="train" if train else "test",
-                             download=False, transform=transform)
+        return SVHN(root, split="train" if train else "test",
+                    download=False, transform=transform)
     if task == "MNIST":
-        return datasets.MNIST(root, train=train, download=False, transform=transform)
+        return MNIST_RGB(root, train=train, download=False, transform=transform)
     if task == "CIFAR10":
         return datasets.CIFAR10(root, train=train, download=False, transform=transform)
     if task == "FashionMNIST":
-        return datasets.FashionMNIST(root, train=train, download=False,
-                                     transform=transform)
-    split = "Train" if train else "Test"
-    return datasets.ImageFolder(str(Path(root) / "notMNIST" / split),
-                                transform=transform, is_valid_file=_valid_image)
+        return FashionMNIST(root, train=train, download=False, transform=transform)
+    return NotMNIST(root, train=train, download=False, transform=transform)
 
 
 def targets_of(dataset):
@@ -222,7 +212,7 @@ def dataset_record(root):
             counts[source].extend(count)
             digest.update((source + "/" + task + ":" + json.dumps(count)).encode())
     roots = [Path(root) / "train_32x32.mat", Path(root) / "test_32x32.mat",
-             Path(root) / "cifar-10-batches-py", Path(root) / "MNIST",
+             Path(root) / "cifar-10-batches-py", Path(root) / "MNIST_RGB",
              Path(root) / "FashionMNIST", Path(root) / "notMNIST"]
     files = []
     for item in roots:
@@ -315,7 +305,7 @@ def child(args):
     support = args.output_root / "_ranpac_support/original"
     upstream = args.output_root / "_ranpac_support/upstream"
     common.check_upstream(upstream)
-    sys.path[:] = [str(upstream)] + [p for p in sys.path if p and
+    sys.path[:] = [str(upstream), str(ROOT)] + [p for p in sys.path if p and
                     Path(p).resolve() not in (common.ROOT, common.ROOT / "tools")]
     root = Path("data/five-root")
     if args.child == "extension":

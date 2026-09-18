@@ -16,7 +16,10 @@ data-manager adapter with the paper's fixed task order:
 Each dataset is a disjoint ten-class task, giving 50 class-incremental labels.
 The task order is fixed; seed 1993 does not permute domains. Input transforms
 match the existing 5-Datasets loader: generic transforms for SVHN/MNIST and
-the CIFAR transform for CIFAR-10/NotMNIST/Fashion-MNIST.
+the CIFAR transform for CIFAR-10/NotMNIST/Fashion-MNIST. The isolated RanPAC
+environment imports the paper's exact `SVHN`, `MNIST_RGB`, `NotMNIST`, and
+`FashionMNIST` classes rather than substituting torchvision's standard layout;
+the paper's NotMNIST loader also skips the two known corrupt image files.
 
 The model-side settings extend RanPAC's official ImageNet-R ID7 recipe: the
 AugReg ImageNet-21K-to-1K ViT-B/16 SSF backbone, 20 PETL epochs on the first

@@ -1,5 +1,6 @@
 """CPU-only protocol and metric tests for the 5-Datasets extension."""
 import csv
+import inspect
 import json
 from pathlib import Path
 import tempfile
@@ -22,6 +23,20 @@ class FiveDatasetRanPACTests(unittest.TestCase):
     def test_transform_families_match_existing_pipeline(self):
         self.assertEqual([five.transform_family(task) for task in five.TASKS],
                          ["generic", "generic", "cifar", "cifar", "cifar"])
+
+    def test_private_loader_reuses_exact_paper_dataset_classes(self):
+        source = inspect.getsource(five.base_dataset)
+        for class_name in ("MNIST_RGB", "FashionMNIST", "NotMNIST", "SVHN"):
+            self.assertIn(class_name, source)
+        self.assertNotIn("datasets.MNIST(", source)
+        self.assertNotIn("datasets.FashionMNIST(", source)
+        self.assertNotIn("datasets.SVHN(", source)
+        self.assertIn(
+            'split="train" if train else "test"', source)
+
+    def test_private_child_can_import_paper_dataset_classes(self):
+        source = inspect.getsource(five.child)
+        self.assertIn("[str(upstream), str(ROOT)]", source)
 
     def test_only_complete_tasks_are_selected(self):
         self.assertEqual(five.selected_tasks(range(20)), [0, 1])
