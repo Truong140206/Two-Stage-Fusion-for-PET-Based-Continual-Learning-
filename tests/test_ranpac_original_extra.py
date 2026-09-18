@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 from tools import run_ranpac_original_extra as extra
 
@@ -51,6 +52,32 @@ class OriginalExtraTests(unittest.TestCase):
         self.assertEqual(cifar["Acc@1"], 100)
         with self.assertRaisesRegex(ValueError, "outside"):
             extra.exact_metrics([20], [0], 2, 10)
+
+    def test_extra_dependency_installed_in_private_environment(self):
+        with tempfile.TemporaryDirectory() as d:
+            support = Path(d)
+            python = support / "env-py39/bin/python"
+            python.parent.mkdir(parents=True)
+            python.touch()
+            missing = Mock(returncode=1)
+            with patch.object(extra.subprocess, "run",
+                              side_effect=[missing, Mock(returncode=0), Mock(returncode=0),
+                                           Mock(returncode=0)]) as run:
+                extra.ensure_extra_environment(support, {}, python, install=True)
+            install = run.call_args_list[1].args[0]
+            self.assertIn("easydict==1.13", install)
+            self.assertEqual(json.loads(
+                (support / "environment-extra-ready.json").read_text()),
+                {"easydict": "1.13"})
+
+    def test_missing_extra_dependency_requires_prepare(self):
+        with tempfile.TemporaryDirectory() as d:
+            support = Path(d)
+            python = support / "python"
+            python.touch()
+            with patch.object(extra.subprocess, "run", return_value=Mock(returncode=1)):
+                with self.assertRaisesRegex(ValueError, "--prepare"):
+                    extra.ensure_extra_environment(support, {}, python, install=False)
 
     def make_results(self, root, name):
         spec = extra.SPECS[name]

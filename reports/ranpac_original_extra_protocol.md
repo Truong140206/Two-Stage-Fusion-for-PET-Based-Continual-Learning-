@@ -19,6 +19,8 @@ Its table cell must remain unreported rather than being approximated.
 - The exact ID7 CSV row is checked before every run.
 - The original upstream `main.py` is invoked without modifying RanPAC code.
 - A private Python 3.9 environment and private model cache are reused.
+- The CIFAR Adapter-only dependency is pinned as `easydict==1.13` and
+  installed only inside that private environment.
 - Dataset contents, class order, runtime versions, pretrained source, and
   pretrained checksum are recorded before GPU execution.
 - The shared paper GPU lock is honored. Existing incomplete and complete run

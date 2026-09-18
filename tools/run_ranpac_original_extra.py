@@ -53,6 +53,34 @@ SPECS = {
                          "pretrained_vit_b16_224_ssf", 20, 48),
     },
 }
+EASYDICT_VERSION = "1.13"
+
+
+def ensure_extra_environment(support, env, python, install):
+    """Add the Adapter-only dependency without rebuilding the proven env."""
+    marker = support / "environment-extra-ready.json"
+    expected = {"easydict": EASYDICT_VERSION}
+    if marker.exists() and json.loads(marker.read_text()) != expected:
+        raise ValueError("Existing extra environment marker differs; preserved")
+    probe = [str(python), "-I", "-c",
+             "import importlib.metadata as m; from easydict import EasyDict; "
+             "assert m.version('easydict') == '" + EASYDICT_VERSION + "'; "
+             "assert EasyDict(value=1).value == 1"]
+    checked = subprocess.run(probe, env=env, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True)
+    if checked.returncode:
+        if not install:
+            raise ValueError("Run --prepare to install easydict==" + EASYDICT_VERSION)
+        pip = [str(python), "-I", "-m", "pip", "--isolated", "install",
+               "--no-cache-dir", "--index-url", "https://pypi.org/simple"]
+        subprocess.run(pip + ["easydict==" + EASYDICT_VERSION], env=env,
+                       check=True, timeout=600)
+        subprocess.run(probe, env=env, check=True, timeout=120)
+        subprocess.run([str(python), "-I", "-m", "pip", "check"],
+                       env=env, check=True, timeout=120)
+    if not marker.exists():
+        with marker.open("x", encoding="utf-8") as stream:
+            json.dump(expected, stream, indent=2)
 
 
 def config_row(upstream, name):
@@ -146,6 +174,7 @@ def child(args):
         sys.argv = [str(upstream / "main.py"), "-i", "7", "-d", spec["official"]]
         runpy.run_path(str(upstream / "main.py"), run_name="__main__")
         return
+    import importlib.metadata as package_metadata
     import numpy as np
     import pandas
     import timm
@@ -156,11 +185,13 @@ def child(args):
     versions = {"python": platform.python_version(), "torch": torch.__version__,
                 "torchvision": torchvision.__version__, "timm": timm.__version__,
                 "pandas": pandas.__version__, "numpy": np.__version__,
-                "tqdm": tqdm.__version__, "cuda": torch.version.cuda}
+                "tqdm": tqdm.__version__, "easydict": package_metadata.version("easydict"),
+                "cuda": torch.version.cuda}
     if (sys.version_info[:2] != (3, 9) or torch.__version__ != "1.13.1+cu117"
             or torchvision.__version__ != "0.14.1+cu117" or timm.__version__ != "0.6.12"
             or pandas.__version__ != "1.5.2" or np.__version__ != "1.24.4"
-            or tqdm.__version__ != "4.65.0" or torch.version.cuda != "11.7"):
+            or tqdm.__version__ != "4.65.0"
+            or versions["easydict"] != EASYDICT_VERSION or torch.version.cuda != "11.7"):
         raise ValueError("Private environment version mismatch: " + str(versions))
     counts, dataset_sha = dataset_record(name)
     print("ORIGINAL_PRETRAINED_DOWNLOAD_OR_CACHE_CHECK", flush=True)
@@ -310,6 +341,7 @@ def main():
         python = native.prepare(support, env) if args.prepare else support / "env-py39/bin/python"
         if not python.is_file():
             raise ValueError("Run --prepare first")
+        ensure_extra_environment(support, env, python, args.prepare)
         for name in args.datasets:
             config_row(upstream, name)
             target = resolve_data(args.data_root, name)
