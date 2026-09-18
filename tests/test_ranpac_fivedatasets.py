@@ -51,6 +51,12 @@ class FiveDatasetRanPACTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "did not change"):
             five.configure_worker_sharing(torch)
 
+    def test_preflight_is_isolated_by_run_tag(self):
+        source = inspect.getsource(five.main)
+        self.assertIn('"preflight-five-" + args.tag', source)
+        child_source = inspect.getsource(five.child)
+        self.assertIn('Path.cwd() / "metadata.json"', child_source)
+
     def test_only_complete_tasks_are_selected(self):
         self.assertEqual(five.selected_tasks(range(20)), [0, 1])
         self.assertEqual(five.selected_tasks(range(30, 50)), [3, 4])

@@ -357,7 +357,7 @@ def child(args):
               "limitations": ["RanPAC has no official 5-Datasets configuration",
                               "Fixed benchmark task order; seed 1993 does not permute domains",
                               "Unmodified RanPAC Learner with a local data-manager extension"]}
-    path = support / "preflight-five/metadata.json"
+    path = Path.cwd() / "metadata.json"
     if path.exists() and json.loads(path.read_text()) != record:
         raise ValueError("Existing five-dataset preflight metadata differs; preserved")
     if not path.exists():
@@ -411,7 +411,7 @@ def main():
             raise ValueError("Run --prepare first")
         ensure_five_environment(support, env, python, args.prepare)
         data = resolve_data(args.data_root)
-        preflight = support / "preflight-five"
+        preflight = support / ("preflight-five-" + args.tag)
         layout(preflight, upstream, data)
         base = [str(python), "-B", "-u", str(Path(__file__).resolve()),
                 "--output-root", str(args.output_root), "--data-root", str(args.data_root),
