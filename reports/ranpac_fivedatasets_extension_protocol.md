@@ -32,7 +32,8 @@ The runner records hashes, per-class counts, runtime versions, checkpoint
 source/checksum, task order, and the pinned upstream revision. It recomputes
 task-mean Top-1, pooled Top-1, forgetting, and backward transfer from saved
 predictions. Existing outputs are never overwritten and the shared paper GPU
-lock is respected.
+lock is respected. PyTorch tensor sharing uses the `file_system` strategy to
+avoid accumulating open file descriptors across the five DataLoader stages.
 
 Expected runtime is substantially longer than ImageNet-R because the first
 task contains the full SVHN training set. The default timeout is eight hours.

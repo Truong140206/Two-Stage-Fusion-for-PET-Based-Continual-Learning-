@@ -38,6 +38,19 @@ class FiveDatasetRanPACTests(unittest.TestCase):
         source = inspect.getsource(five.child)
         self.assertIn("[str(upstream), str(ROOT)]", source)
 
+    def test_worker_sharing_avoids_file_descriptor_exhaustion(self):
+        torch = Mock()
+        torch.multiprocessing.get_sharing_strategy.return_value = "file_system"
+        five.configure_worker_sharing(torch)
+        torch.multiprocessing.set_sharing_strategy.assert_called_once_with(
+            "file_system")
+
+    def test_worker_sharing_change_is_verified(self):
+        torch = Mock()
+        torch.multiprocessing.get_sharing_strategy.return_value = "file_descriptor"
+        with self.assertRaisesRegex(RuntimeError, "did not change"):
+            five.configure_worker_sharing(torch)
+
     def test_only_complete_tasks_are_selected(self):
         self.assertEqual(five.selected_tasks(range(20)), [0, 1])
         self.assertEqual(five.selected_tasks(range(30, 50)), [3, 4])

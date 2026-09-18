@@ -158,6 +158,15 @@ def targets_of(dataset):
     return [int(value) for value in targets]
 
 
+def configure_worker_sharing(torch):
+    """Avoid exhausting file descriptors across repeated DataLoader stages."""
+    torch.multiprocessing.set_sharing_strategy("file_system")
+    strategy = torch.multiprocessing.get_sharing_strategy()
+    if strategy != "file_system":
+        raise RuntimeError("PyTorch sharing strategy did not change: " + strategy)
+    print("RANPAC_FIVE_SHARING_STRATEGY=" + strategy, flush=True)
+
+
 class FiveDataManager:
     def __init__(self, root):
         self.root = Path(root)
@@ -229,6 +238,7 @@ def save_extension(folder, root):
     import torch
     from RanPAC import Learner
 
+    configure_worker_sharing(torch)
     torch.manual_seed(1)
     torch.cuda.manual_seed(1)
     torch.cuda.manual_seed_all(1)
