@@ -66,20 +66,15 @@ def ensure_five_environment(support, env, python, install):
             json.dump(expected, stream, indent=2)
 
 
-def resolve_data(root):
-    candidates = [root.resolve(), (root / "5-datasets").resolve()]
-    valid = []
-    for base in candidates:
-        required = [base / "train_32x32.mat", base / "test_32x32.mat",
-                    base / "cifar-10-batches-py/test_batch", base / "MNIST",
-                    base / "FashionMNIST", base / "notMNIST/Train",
-                    base / "notMNIST/Test"]
-        if all(path.exists() for path in required):
-            valid.append(base)
-    valid = sorted(set(valid))
-    if len(valid) != 1:
-        raise ValueError("Need exactly one prepared 5-Datasets root; found %s" % valid)
-    return valid[0]
+def resolve_data(root, resolver=None):
+    """Reuse the paper verifier's constructor-based, no-download audit."""
+    root = root.resolve()
+    if resolver is None:
+        from tools.verify_paper_backbone_grid import resolve_data as resolver
+    resolved = Path(resolver(root, "fivedatasets")).resolve()
+    if resolved != root:
+        raise ValueError("5-Datasets resolver unexpectedly changed the requested root")
+    return resolved
 
 
 def layout(folder, upstream, data):

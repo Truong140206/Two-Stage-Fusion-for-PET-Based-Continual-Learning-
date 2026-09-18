@@ -31,18 +31,23 @@ class FiveDatasetRanPACTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "outside"):
             five.selected_tasks(range(50, 60))
 
-    def test_resolve_prepared_data_root(self):
+    def test_resolve_prepared_data_root_with_proven_verifier(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
-            for file in ("train_32x32.mat", "test_32x32.mat",
-                         "cifar-10-batches-py/test_batch"):
-                path = root / file
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.touch()
-            for folder in ("MNIST", "FashionMNIST", "notMNIST/Train",
-                           "notMNIST/Test"):
-                (root / folder).mkdir(parents=True)
-            self.assertEqual(five.resolve_data(root), root.resolve())
+            calls = []
+
+            def resolver(path, dataset):
+                calls.append((path, dataset))
+                return path
+
+            self.assertEqual(five.resolve_data(root, resolver), root.resolve())
+            self.assertEqual(calls, [(root.resolve(), "fivedatasets")])
+
+    def test_resolver_cannot_redirect_data_root(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            with self.assertRaisesRegex(ValueError, "changed"):
+                five.resolve_data(root, lambda _path, _dataset: root / "elsewhere")
 
     def test_scipy_installed_only_in_private_environment(self):
         with tempfile.TemporaryDirectory() as d:
